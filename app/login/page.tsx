@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/utils/supabase/client' // <--- CAMBIO AQUÍ
+import { createClient } from '@/utils/supabase/client' 
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
@@ -12,22 +12,49 @@ export default function LoginPage() {
   // Inicializamos el cliente de Supabase para el navegador
   const supabase = createClient()
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setLoading(true)
+        
+        // 1. Intentar el Login
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (error) {
-      alert('Error: ' + error.message)
-      setLoading(false)
-    } else {
-      // IMPORTANTE: router.refresh() obliga a Next.js a re-validar los 
-      // Server Components y el Proxy con la nueva cookie de sesión.
-      router.refresh()
-      router.push('/') // El root redirigirá al dashboard
-    }
-  }
+        if (error) {
+          alert('Error: ' + error.message)
+          setLoading(false)
+          return
+        }
+
+        // 2. Obtener el perfil y el SLUG del restaurante asociado
+        const { data: perfil, error: perfilError } = await supabase
+          .from('perfiles_admin')
+          .select('rol, restaurantes(slug)')
+          .eq('id', data.user.id)
+          .single()
+
+        if (perfilError || !perfil) {
+          alert('Error al recuperar perfil de usuario')
+          setLoading(false)
+          return
+        }
+
+        // 3. REDIRECCIÓN INTELIGENTE
+        router.refresh() // Limpia estados previos
+
+        // Obtenemos el slug (Supabase lo devuelve como array)
+        const userSlug = perfil.restaurantes[0]?.slug
+
+        if (perfil.rol === 'admin') {
+          // Si es admin, al panel de control global
+          router.push('/admin/dashboard')
+        } else if (perfil.rol === 'cocina' && userSlug) {
+          // Si es cocina, directo a SU cocina
+          router.push(`/cocina/${userSlug}`)
+        } else {
+          // Fallback de seguridad
+          router.push('/')
+        }
+      }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
