@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { createProduct, updateProduct } from './actions' // 1. Importamos la nueva acción
+import { createProduct, updateProduct } from './actions' // 1. Importamos las dos acción
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -156,6 +156,69 @@ export default function FormularioProducto({
               placeholder="Describe los ingredientes..."
             />
           </div>
+
+            {/*Nuevos campos de 
+            - Es un campo Compuesto
+            - Es un complemento
+            - cantidad de complementos
+            */}
+
+            {/* --- SECCIÓN DE LÓGICA DE PLATOS (NUEVO) --- */}
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-6 mb-8">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <span className="text-orange-500">⚙️</span> Configuración de Producto
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Toggle: Es Complemento */}
+                <label className="flex items-center cursor-pointer gap-3 p-3 bg-white rounded-xl border border-slate-100 hover:shadow-sm transition-all">
+                  <input 
+                    type="checkbox" 
+                    name="es_complemento"
+                    className="w-5 h-5 accent-orange-500"
+                    defaultChecked={productoInicial?.es_complemento || false}
+                  />
+                  <div>
+                    <span className="block font-bold text-sm text-slate-700">¿Es un complemento?</span>
+                    <span className="text-xs text-slate-500">Aparecerá en la lista de guarniciones.</span>
+                  </div>
+                </label>
+
+                {/* Toggle: Es Plato Compuesto */}
+                <label className="flex items-center cursor-pointer gap-3 p-3 bg-white rounded-xl border border-slate-100 hover:shadow-sm transition-all">
+                  <input 
+                    type="checkbox" 
+                    name="es_plato_compuesto"
+                    className="w-5 h-5 accent-orange-500"
+                    defaultChecked={productoInicial?.es_plato_compuesto || false}
+                  />
+                  <div>
+                    <span className="block font-bold text-sm text-slate-700">¿Es plato fuerte/compuesto?</span>
+                    <span className="text-xs text-slate-500">Permite elegir acompañamientos.</span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Input Numérico: Cantidad de Complementos */}
+              <div className="pt-4 border-t border-slate-100">
+                <label className="block text-sm font-bold text-slate-700 mb-2">
+                  Cantidad de acompañamientos permitidos
+                </label>
+                <input 
+                  type="number" 
+                  name="cant_complementos"
+                  min="0"
+                  max="5"
+                  className="w-24 px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-orange-500 outline-none"
+                  defaultValue={productoInicial?.cant_complementos || 0}
+                  placeholder="0"
+                />
+                <p className="text-xs text-slate-500 mt-1 italic">
+                  Solo aplica si marcó este producto como "Plato Compuesto".
+                </p>
+              </div>
+            </div>
+
 
           <button type="submit" className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl hover:bg-orange-600 transition-all shadow-lg">
             {productoInicial ? 'Actualizar Producto' : 'Guardar Producto'}

@@ -6,6 +6,7 @@ export async function submitOrder(orderData: {
   mesa_id: string;
   total: number;
   items: any[];
+  es_adicional: boolean;
 }) {
   const supabase = await createClient()
 
@@ -16,7 +17,8 @@ export async function submitOrder(orderData: {
       restaurante_id: orderData.restaurante_id,
       mesa_id: orderData.mesa_id,
       total: orderData.total,
-      estado: 'pendiente' // Estado inicial
+      estado: 'pendiente', // Estado inicial
+      es_adicional: orderData.es_adicional // <--- parametro que indica si es una orden adicional
     })
     .select()
     .single()
@@ -30,6 +32,7 @@ export async function submitOrder(orderData: {
     producto_id: item.id,
     cantidad: item.cantidad,
     precio_unitario: item.precio,
+    notas: item.notas || null
     //subtotal: item.precio * item.cantidad. esta ya no va por que es auto generada por la base de datos
   }))
 

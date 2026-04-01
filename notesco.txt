@@ -11,3 +11,42 @@ UID de apfranco404@gmail.com
 
 
 
+
+
+Esta es la IP de cooffee rooster 
+192.168.58.146
+
+UUID de Kandil PIzza 
+ca4322d6-15bc-4c86-a883-6e17b7ec4b56
+Slug: kandil-pizza
+
+
+UUID de Tacos la Luna 
+9057b974-0b00-4e92-9095-7ac32a43b093
+Slug: tacos-la-luna
+
+Mesas de tacos la luna 
+9d025957-40fe-41ac-8a87-ab898fda0609  mesa1
+efb28ea3-f038-4c13-a94f-39b1fde46524  mesa2
+95da1f0e-fd31-486d-97ab-87e8bdca5fd4 mesa3
+
+-- URL para crear QR de tacos la luna
+http://192.168.0.103:3005/tacos-la-luna?mesa=efb28ea3-f038-4c13-a94f-39b1fde46524
+-- URL para crear QR de 
+http://192.168.0.103:3005/kandil-pizza?mesa=b2f9a676-960d-471f-a814-27d3608f4183
+
+
+IP de mi hause
+192.168.0.103 
+
+usuario de cocina de tacos la luna 
+cocina@tacoslaluna.net
+
+ip de rooster coffee kavala 
+192.168.58.166
+
+Ip de kaleo caffe 
+192.168.58.119
+
+
+

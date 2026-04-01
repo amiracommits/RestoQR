@@ -14,6 +14,7 @@ export default async function PublicMenuPage({ params,searchParams}: {
   const { slug } = await params
   const { mesa: mesaId } = await searchParams // Extraemos el UUID de la mesa
   const supabase = await createClient()
+  
 
   // 1. Obtener datos del Restaurante por Slug
   const { data: restaurante } = await supabase
@@ -42,11 +43,13 @@ export default async function PublicMenuPage({ params,searchParams}: {
     .from('productos')
     .select('*, categorias(id, nombre)')
     .eq('restaurante_id', restaurante.id)
-    .order('nombre')
+    .eq('disponible', true) // Solo los activos
+    .order('nombre');
+
 
   if (!productos) return <div className="p-10 text-center">Cargando menú...</div>
 
-  // 3. Agrupar productos por categoría eficientemente
+  // 4. Agrupar productos por categoría eficientemente
   // Usamos un Map para mantener el orden y agrupar
   const categoriasMap = new Map()
   
@@ -68,11 +71,26 @@ export default async function PublicMenuPage({ params,searchParams}: {
     ...data
   }))
 
+  // validacion de si tiene pedido activo 
+  let tienePedidoActivo = false
+  if (mesaId) {
+    const { count } = await supabase
+      .from('pedidos')
+      .select('*', { count: 'exact', head: true })
+      .eq('mesa_id', mesaId)
+      .neq('estado', 'entregado')
+      .neq('estado', 'pagado')
+      .limit(1)
+    
+    tienePedidoActivo = (count ?? 0) > 0
+  }
+
 return (
     <MenuViewCliente 
       restaurante={restaurante} 
       menu={menuEstructurado}
       mesaId={mesaId} // <-- Pasamos el ID de la mesa capturado del QR
+      esPedidoAdicional={tienePedidoActivo} // <-- Pasamos la bandera aquí
     />
   )
 }

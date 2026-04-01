@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 
 const menuItems = [
   { nombre: 'Panel Control', href: '/admin/dashboard', icon: '📊' },
+  { nombre: 'Pedidos', href: '/admin/pedidos', icon: '📋' }, // <--- NUEVO ACCESO
   { nombre: 'Productos', href: '/admin/productos', icon: '🍔' },
   { nombre: 'Categorías', href: '/admin/categorias', icon: '📂' },
   { nombre: 'Configuración', href: '/admin/config', icon: '⚙️' },
@@ -24,14 +25,16 @@ export default function Sidebar() {
 
       <nav className="flex-1 px-4 space-y-2">
         {menuItems.map((item) => {
-          const isActive = pathname === item.href
+          // Lógica para marcar como activo incluso en sub-rutas
+          const isActive = pathname.startsWith(item.href)
+          
           return (
             <Link
               key={item.href}
               href={item.href}
               className={`flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all duration-300 ${
                 isActive 
-                ? 'bg-orange-600 text-white shadow-lg' // Estado Activo: Naranja
+                ? 'bg-orange-600 text-white shadow-lg scale-105' // Estado Activo: Naranja + ligero zoom
                 : 'text-slate-200 hover:bg-orange-500 hover:text-white' // Hover: Naranja
               }`}
             >
@@ -42,10 +45,10 @@ export default function Sidebar() {
         })}
       </nav>
 
-     {/* SECCIÓN INFERIOR ACTUALIZADA */}
+     {/* SECCIÓN INFERIOR */}
       <div className="p-4 border-t border-blue-800/50">
         <button 
-          onClick={() => handleSignOut()} // <--- CONEXIÓN DE LA ACCIÓN
+          onClick={() => handleSignOut()} 
           className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 font-bold hover:bg-red-500 hover:text-white rounded-2xl transition-all duration-300"
         >
           <span>🚪</span> Cerrar Sesión

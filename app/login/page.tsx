@@ -19,41 +19,21 @@ export default function LoginPage() {
         // 1. Intentar el Login
         const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
+        // ... (después del signInWithPassword exitoso)
+        // 1. Forzamos el refresco de cookies
+        router.refresh()
+
+        // 2. Esperamos un milisegundo para asegurar que la cookie se asiente
+        setTimeout(() => {
+          router.push('/') // Vamos a la raíz y dejamos que app/page.tsx decida el rol
+        }, 100);
+
         if (error) {
           alert('Error: ' + error.message)
           setLoading(false)
           return
         }
 
-        // 2. Obtener el perfil y el SLUG del restaurante asociado
-        const { data: perfil, error: perfilError } = await supabase
-          .from('perfiles_admin')
-          .select('rol, restaurantes(slug)')
-          .eq('id', data.user.id)
-          .single()
-
-        if (perfilError || !perfil) {
-          alert('Error al recuperar perfil de usuario')
-          setLoading(false)
-          return
-        }
-
-        // 3. REDIRECCIÓN INTELIGENTE
-        router.refresh() // Limpia estados previos
-
-        // Obtenemos el slug (Supabase lo devuelve como array)
-        const userSlug = perfil.restaurantes[0]?.slug
-
-        if (perfil.rol === 'admin') {
-          // Si es admin, al panel de control global
-          router.push('/admin/dashboard')
-        } else if (perfil.rol === 'cocina' && userSlug) {
-          // Si es cocina, directo a SU cocina
-          router.push(`/cocina/${userSlug}`)
-        } else {
-          // Fallback de seguridad
-          router.push('/')
-        }
       }
 
   return (
