@@ -25,11 +25,11 @@ export default async function PublicMenuPage({ params,searchParams}: {
 
   if (!restaurante) notFound() // Manda a la página 404 si el slug no existe
 
-  // 2. (Opcional pero recomendado) Validar que la mesa pertenezca a este restaurante
+  // 2.1 (Opcional pero recomendado) Validar que la mesa pertenezca a este restaurante
   let mesaValida = null
   if (mesaId) {
     const { data: mesaData } = await supabase
-      .from('mesas') // Asumiendo que tienes una tabla de mesas
+      .from('mesas') 
       .select('*')
       .eq('id', mesaId)
       .eq('restaurante_id', restaurante.id)
@@ -69,7 +69,11 @@ export default async function PublicMenuPage({ params,searchParams}: {
   const menuEstructurado = Array.from(categoriasMap.entries()).map(([id, data]) => ({
     id,
     ...data
-  }))
+  })
+
+)
+
+  
 
   // validacion de si tiene pedido activo 
   let tienePedidoActivo = false
@@ -85,12 +89,14 @@ export default async function PublicMenuPage({ params,searchParams}: {
     tienePedidoActivo = (count ?? 0) > 0
   }
 
+  
 return (
     <MenuViewCliente 
-      restaurante={restaurante} 
-      menu={menuEstructurado}
+      restaurante={restaurante}  // <-- Restaurante
+      menu={menuEstructurado} // <-- paso el menu del restaurante en cuestion
       mesaId={mesaId} // <-- Pasamos el ID de la mesa capturado del QR
       esPedidoAdicional={tienePedidoActivo} // <-- Pasamos la bandera aquí
+      estadoMesa={mesaValida?.estado || 'disponible'} //nueva prop que me dice el estado de la mesa
     />
   )
 }

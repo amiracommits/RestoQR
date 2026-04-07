@@ -31,13 +31,24 @@ efb28ea3-f038-4c13-a94f-39b1fde46524  mesa2
 95da1f0e-fd31-486d-97ab-87e8bdca5fd4 mesa3
 
 -- URL para crear QR de tacos la luna
-http://192.168.0.103:3005/tacos-la-luna?mesa=efb28ea3-f038-4c13-a94f-39b1fde46524
+Mesa 1
+http://192.168.0.106:3005/tacos-la-luna?mesa=9d025957-40fe-41ac-8a87-ab898fda0609
+mesa 2
+http://192.168.0.106:3005/tacos-la-luna?mesa=efb28ea3-f038-4c13-a94f-39b1fde46524
+mesa 3
+http://192.168.0.106:3005/tacos-la-luna?mesa=95da1f0e-fd31-486d-97ab-87e8bdca5fd4
+mesa 4
+
+
+
+
 -- URL para crear QR de 
 http://192.168.0.103:3005/kandil-pizza?mesa=b2f9a676-960d-471f-a814-27d3608f4183
 
 
 IP de mi hause
 192.168.0.103 
+192.168.0.106 Lenovo
 
 usuario de cocina de tacos la luna 
 cocina@tacoslaluna.net

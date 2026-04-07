@@ -1,52 +1,100 @@
-'use server'
-import { createClient } from '@/utils/supabase/server'
+"use server";
+import { createClient } from "@/utils/supabase/server";
 
-export async function submitOrder(orderData: {
+interface ItemPedido {
+  id: string;
+  nombre: string;
+  cantidad: number;
+  precio: number;
+  notas?: string;
+}
+
+interface OrderData {
   restaurante_id: string;
   mesa_id: string;
   total: number;
-  items: any[];
+  notas?: string; // 👈 Agregamos notas a nivel de orden
+  items: ItemPedido[];
   es_adicional: boolean;
-}) {
-  const supabase = await createClient()
+}
 
-  // 1. Insertar el Encabezado (PEDIDOS)
+export async function submitOrder(orderData: OrderData) {
+  const supabase = await createClient();
+
+  /*obtener la data de la mesa desde el valor de la URL*/
+  const { data: mesa } = await supabase
+    .from("mesas")
+    .select("estado")
+    .eq("id", orderData.mesa_id)
+    .single();
+  const esAdicional = mesa?.estado === "ocupada";
+  if (!esAdicional) {
+    // Si la mesa está libre se ocupa por esta petición
+    await supabase
+      .from("mesas")
+      .update({ estado: "ocupada" })
+      .eq("id", orderData.mesa_id);
+  }
+
+  // 1. Obtener número correlativo desde RPC de supabase
+  const { data: nuevoNumero, error: rpcError } = await supabase.rpc(
+    "obtener_siguiente_numero_pedido",
+    { target_restaurante_id: orderData.restaurante_id },
+  );
+
+  // Si rpcError no es null, Supabase nos dirá por qué falló (ej: error de permisos o ID inexistente)
+  if (rpcError) {
+    console.error("❌ Error Crítico RPC:", rpcError.message);
+    throw new Error(`Error en el contador: ${rpcError.message}`);
+  }
+
+  // Si nuevoNumero sigue siendo null aquí (aunque con el RAISE EXCEPTION de arriba ya no debería pasar)
+  if (nuevoNumero === null) {
+    throw new Error("El restaurante no devolvió un número de pedido válido.");
+  }
+
+  // 2. Insertar Encabezado (PEDIDOS)
   const { data: pedido, error: pedidoError } = await supabase
-    .from('pedidos')
+    .from("pedidos")
     .insert({
       restaurante_id: orderData.restaurante_id,
       mesa_id: orderData.mesa_id,
       total: orderData.total,
-      estado: 'pendiente', // Estado inicial
-      es_adicional: orderData.es_adicional // <--- parametro que indica si es una orden adicional
+      estado: "pendiente",
+      notas: orderData.notas || null, // 👈 AHORA SÍ incluimos las notas del pedido
+      es_adicional: orderData.es_adicional,
+      numero_pedido_dia: nuevoNumero,
     })
-    .select()
-    .single()
+    .select("id, numero_pedido_dia")
+    .single();
 
-  if (pedidoError) throw new Error(`Error al crear pedido: ${pedidoError.message}`)
+  if (pedidoError || !pedido) {
+    throw new Error(`Error en encabezado: ${pedidoError?.message}`);
+  }
 
-  // 2. Preparar los detalles (DETALLE_PEDIDOS)
-  // Agrupamos los items para insertar cantidades correctas
-  const detalles = orderData.items.map(item => ({
+  // --- PREPARAR LOS DETALLES (DETALLE_PEDIDOS)
+  const detalles = orderData.items.map((item) => ({
     pedido_id: pedido.id,
     producto_id: item.id,
     cantidad: item.cantidad,
     precio_unitario: item.precio,
-    notas: item.notas || null
-    //subtotal: item.precio * item.cantidad. esta ya no va por que es auto generada por la base de datos
-  }))
+    notas: item.notas || null,
+  }));
 
-  // 3. Insertar todos los detalles en una sola ráfaga (Bulk Insert)
+  // 4. Insertar Detalles en Bulk
   const { error: detallesError } = await supabase
-    .from('detalle_pedidos')
-    .insert(detalles)
+    .from("detalle_pedidos")
+    .insert(detalles);
 
   if (detallesError) {
-    // Nota de ingeniero: En un sistema crítico aquí haríamos un rollback, 
-    // pero Supabase/Postgres maneja bien la integridad referencial.
-    console.error("Error en detalles:", detallesError)
-    throw new Error("El pedido se creó pero hubo un problema con los detalles.")
+    console.error("Error crítico en detalles:", detallesError);
+    // Podrías borrar el encabezado aquí (Rollback manual) si fuera necesario
+    throw new Error("Error al insertar los productos del pedido.");
   }
 
-  return { success: true, pedidoId: pedido.id }
+  return {
+    success: true,
+    pedidoId: pedido.id,
+    numeroComanda: pedido.numero_pedido_dia,
+  };
 }

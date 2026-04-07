@@ -1,51 +1,163 @@
-'use client'
-import { useState } from 'react'
-import { format } from 'date-fns'
+"use client";
+import { useState, useEffect, useCallback } from "react";
+import { format } from "date-fns";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
+import { finalizarPedidoCompleto } from "./actions";
+import { CajaDashboardProps, Factura, DetalleFactura } from "./types"; // 👈 Tipos externos
 
-export default function CajaDashboard({ restaurante, pedidosIniciales }: any) {
-  const [pedidos, setPedidos] = useState(pedidosIniciales)
-  const [pedidoParaFacturar, setPedidoParaFacturar] = useState<any>(null)
+export default function CajaDashboard({
+  restaurante,
+  facturasIniciales,
+}: CajaDashboardProps) {
+  const [mounted, setMounted] = useState(false);
+  const [facturas, setFacturas] = useState<Factura[]>(facturasIniciales);
+  const [facturaParaCobrar, setFacturaParaCobrar] = useState<Factura | null>(
+    null,
+  );
+  const [procesando, setProcesando] = useState(false);
 
-  const handleImprimir = () => {
-    window.print() // Dispara el diálogo de impresión del navegador
-  }
+  const supabase = createClient();
+  const router = useRouter();
+
+  const playPing = useCallback(() => {
+    const audio = new Audio("/sounds/notification.mp3");
+    audio.play().catch(() => console.log("Permiso de audio requerido"));
+  }, []);
+
+  // Sincronizar con tiempo real (Escuchando la tabla FACTURAS)
+  useEffect(() => {
+    const channel = supabase
+      .channel("cambios-facturas")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "facturas",
+          filter: `restaurante_id=eq.${restaurante.id}`,
+        },
+        () => router.refresh(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [restaurante.id, supabase, router]);
+
+  useEffect(() => {
+    setFacturas(facturasIniciales);
+  }, [facturasIniciales]);
+
+  const handleConfirmarPago = async () => {
+    if (!facturaParaCobrar) return;
+    setProcesando(true);
+    try {
+      const result = await finalizarPedidoCompleto(
+        facturaParaCobrar.id,
+        restaurante.slug,
+      );
+
+      if (result.success) {
+        setFacturaParaCobrar(null);
+      } else {
+        alert("Error: " + result.error);
+      }
+    } catch (error) {
+      alert("Error inesperado al procesar el pago");
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    const channels = supabase.getChannels();
+    channels.forEach((ch) => supabase.removeChannel(ch));
+    await supabase.auth.signOut();
+    router.replace("/login");
+  };
+
+  const handleFinalizar = async (factura: Factura) => {
+    setProcesando(true);
+
+    // Abrir la vista de impresión en nueva pestaña ANTES de que desaparezca de la lista
+    // Puedes crear una ruta como /caja/[slug]/imprimir/[id]
+    window.open(`/caja/${restaurante.slug}/imprimir/${factura.id}`, "_blank");
+
+    await finalizarPedidoCompleto(factura.id, factura.mesas.id);
+    setProcesando(false);
+  };
+
+  const handleGenerarFactura = (facturaId: string) => {
+    // Abrimos la ruta de impresión en una pestaña nueva
+    const url = `/caja/${restaurante.slug}/imprimir/${facturaId}`;
+    window.open(url, "_blank", "width=400,height=600");
+  };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Si no está montado, renderizamos un esqueleto o nada para evitar el mismatch
+  if (!mounted) return <div className="min-h-screen bg-slate-900" />;
 
   return (
     <main className="min-h-screen bg-slate-900 p-6 print:p-0">
-      {/* HEADER - Se oculta al imprimir */}
-      <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4 print:hidden">
-        <h1 className="text-2xl font-black text-white uppercase">
-          💰 CAJA: <span className="text-orange-500">{restaurante.nombre}</span>
-        </h1>
+      <header className="flex justify-between items-start mb-8 border-b border-slate-800 pb-4 print:hidden">
+        <div>
+          <h1 className="text-3xl font-black text-orange-500 uppercase tracking-tight">
+            Box de Caja: {restaurante?.nombre || "Cargando..."}
+          </h1>
+        </div>
+        {/* ... Resto del Header y Grid ... */}
+        <div className="flex flex-col items-end gap-3">
+          <div className="bg-emerald-500/10 text-emerald-500 px-4 py-1.5 rounded-full border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest animate-pulse flex items-center gap-2">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+            Sistema Online
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-[10px] font-black text-slate-500 hover:text-red-400 border border-slate-700 hover:border-red-400/30 px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter"
+          >
+            Terminar Sesión
+          </button>
+        </div>
       </header>
 
-      {/* GRID DE PEDIDOS - Se oculta al imprimir */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 print:hidden">
-        {pedidos.map((pedido: any) => (
-          <div key={pedido.id} className="bg-slate-800 rounded-3xl border-2 border-slate-700 p-5 flex flex-col shadow-xl">
+        {facturas.map((fac: Factura) => (
+          <div
+            key={fac.id}
+            className="bg-slate-800 rounded-3xl border-2 border-slate-700 p-5 flex flex-col shadow-xl"
+          >
             <div className="flex justify-between items-start mb-4">
-              <span className="text-2xl font-black text-white">MESA {pedido.mesas?.numero_mesa}</span>
-              <span className="text-[10px] font-bold text-slate-400">#{pedido.id.slice(0,5)}</span>
+              <span className="text-2xl font-black text-white">
+                MESA {fac.mesas?.numero_mesa}
+              </span>
+              <span className="text-3xl font-black text-white">
+                #{fac.numero_pedido_amigable}
+              </span>
             </div>
 
             <div className="flex-1 space-y-2 mb-6">
-              {pedido.detalle_pedidos.map((det: any) => (
+              {fac.detalle_facturas.map((det: DetalleFactura) => (
                 <div key={det.id} className="flex justify-between text-sm">
-                  <span className="text-slate-300">{det.cantidad}x {det.productos.nombre}</span>
-                  <span className="text-white font-bold">L. {(det.cantidad * det.precio).toFixed(2)}</span>
+                  <span className="text-slate-300">
+                    {det.cantidad}x {det.productos.nombre}
+                  </span>
+                  <span className="text-white font-bold">
+                    L. {det.subtotal.toFixed(2)}
+                  </span>
                 </div>
               ))}
             </div>
 
-            <div className="border-t border-slate-700 pt-4 mb-4">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 text-xs uppercase font-bold">Total a Pagar</span>
-                <span className="text-xl font-black text-orange-500">L. {pedido.total.toFixed(2)}</span>
-              </div>
+            <div className="border-t border-slate-700 pt-4 mb-4 text-right text-2xl font-black text-orange-500">
+              L. {fac.total.toFixed(2)}
             </div>
 
-            <button 
-              onClick={() => setPedidoParaFacturar(pedido)}
+            <button
+              onClick={() => setFacturaParaCobrar(fac)}
               className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-3 rounded-xl transition-all uppercase tracking-widest text-xs"
             >
               Generar Factura
@@ -54,74 +166,55 @@ export default function CajaDashboard({ restaurante, pedidosIniciales }: any) {
         ))}
       </div>
 
-      {/* 🧾 MODAL DE VISTA PREVIA DE FACTURA (Papel Térmico 80mm) */}
-      {pedidoParaFacturar && (
+      {/* MODAL DE TICKET (Mismo diseño, data de Factura) */}
+      {facturaParaCobrar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm print:static print:bg-white print:p-0">
-          <div className="bg-white w-[300px] p-6 shadow-2xl print:shadow-none print:w-[80mm] print:p-2">
-            {/* Estilo para papel térmico */}
-            <style jsx global>{`
-              @media print {
-                body { background: white; }
-                @page { margin: 0; size: 80mm auto; }
-              }
-            `}</style>
-
+          {/* ... Aquí pones el modal que ya diseñaste, usando facturaParaCobrar ... */}
+          <div className="bg-white w-[300px] p-6 shadow-2xl print:w-[80mm]">
             <div className="text-center font-mono text-xs text-black">
-              <h2 className="text-lg font-black uppercase mb-1">{restaurante.nombre}</h2>
-              <p className="mb-4">RTN: 0801-XXXX-XXXXXX</p>
-              <div className="border-t border-dashed border-black my-2"></div>
-              <p className="font-bold">FACTURA DE VENTA</p>
-              <p>Mesa: {pedidoParaFacturar.mesas?.numero_mesa}</p>
-              <p>{format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
-              <div className="border-t border-dashed border-black my-2"></div>
-
+              <h2 className="text-lg font-black uppercase mb-1">
+                {restaurante.nombre}
+              </h2>
+              <p className="border-t border-dashed border-black my-2"></p>
               <table className="w-full mb-4">
-                <thead>
-                  <tr className="border-b border-black">
-                    <th className="text-left py-1">Cant</th>
-                    <th className="text-left py-1">Desc</th>
-                    <th className="text-right py-1">Total</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  {pedidoParaFacturar.detalle_pedidos.map((det: any) => (
-                    <tr key={det.id}>
-                      <td className="py-1">{det.cantidad}</td>
-                      <td className="py-1">{det.productos.nombre}</td>
-                      <td className="text-right py-1">{(det.cantidad * det.precio).toFixed(2)}</td>
-                    </tr>
-                  ))}
+                  {facturaParaCobrar.detalle_facturas.map(
+                    (det: DetalleFactura) => (
+                      <tr key={det.id}>
+                        <td className="text-left">
+                          {det.cantidad}x {det.productos.nombre}
+                        </td>
+                        <td className="text-right">
+                          {det.subtotal.toFixed(2)}
+                        </td>
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </table>
-
-              <div className="border-t border-black pt-2">
-                <div className="flex justify-between text-base font-black">
-                  <span>TOTAL</span>
-                  <span>L. {pedidoParaFacturar.total.toFixed(2)}</span>
-                </div>
+              <div className="border-t border-black pt-2 flex justify-between text-base font-black">
+                <span>TOTAL</span>
+                <span>L. {facturaParaCobrar.total.toFixed(2)}</span>
               </div>
-
-              <p className="mt-6 italic">¡Gracias por su preferencia!</p>
-              <p className="text-[10px] mt-2">Desarrollado por ZNT Admin</p>
             </div>
-
-            <div className="mt-8 flex gap-2 print:hidden">
-              <button 
-                onClick={handleImprimir}
-                className="flex-1 bg-slate-900 text-white font-bold py-3 rounded-lg"
+            <div className="mt-8 flex flex-col gap-2 print:hidden">
+              <button
+                onClick={() => handleGenerarFactura(facturaParaCobrar.id)}
+                className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg"
               >
                 🖨️ Imprimir
               </button>
-              <button 
-                onClick={() => setPedidoParaFacturar(null)}
-                className="flex-1 border border-slate-300 font-bold py-3 rounded-lg"
+              <button
+                onClick={handleConfirmarPago}
+                disabled={procesando}
+                className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg"
               >
-                Cerrar
+                {procesando ? "Procesando..." : "✅ Confirmar y Liberar Mesa"}
               </button>
             </div>
           </div>
         </div>
       )}
     </main>
-  )
+  );
 }
