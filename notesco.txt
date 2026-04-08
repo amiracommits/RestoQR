@@ -61,3 +61,27 @@ Ip de kaleo caffe
 
 
 
+Flujo de GIT para trabajo en varias compus 
+
+#primero se trae el repo de main
+git pull origin main
+
+# crear una rama para lo que sea que vamos a trabajar
+git checkout -b feature/nombre-de-lo-que-haces
+
+# se trabaja like a boss y se prueba que todo bien
+
+#se ejecuta el commit al REPO 
+git add .
+git commit -m "feat: nueva funcionalidad"
+
+#se sube la rama 
+git push origin feature/nombre-de-lo-que-haces
+
+#se integra a main 
+git checkout main
+git pull origin main
+git merge feature/nombre-de-lo-que-haces
+git push origin main
+
+
