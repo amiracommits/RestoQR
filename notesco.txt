@@ -61,3 +61,14 @@ Ip de kaleo caffe
 
 
 
+comandos de git 
+
+# hacer pull de la rama main desde prod
+git pull origin main 
+# escribir codigo like a boss 
+# agregar los cambios a un commit 
+git add .
+git commit -m "feat algo nuevo"
+#  impactar la rama main
+git push origin main
+
