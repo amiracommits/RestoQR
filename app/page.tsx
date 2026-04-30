@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 interface PerfilConRestaurante {
   rol: string;
-  restaurante_id: string;
+  restaurante_id: string | null;
   restaurante: {
     slug: string;
   } | null;
@@ -30,49 +30,53 @@ export default async function IndexPage() {
 
   const perfil = data as unknown as PerfilConRestaurante;
 
-if (error || !perfil) {
+  if (error || !perfil) {
     console.error("❌ Error o Perfil no encontrado:", error);
     redirect('/login');
   }
 
-  // 💡 MEJORA 1: Normalizamos el rol a minúsculas y quitamos espacios
+  // Normalizamos el rol para evitar errores de sintaxis
   const rolUser = perfil.rol?.toLowerCase().trim();
   const userSlug = perfil.restaurante?.slug;
 
-  /* 💡 LOG DE DEPURACIÓN (Revisa tu terminal/consola de Next.js)
-  console.log("--- DEBUG ACCESO ZNT ---");
-  console.log("ID Usuario:", user.id);
-  console.log("Rol en DB:", perfil.rol);
-  console.log("Rol procesado:", rolUser);
-  console.log("Slug recuperado:", userSlug);
-  console.log("------------------------");
-  */
+  /**
+   * 1. SUPERADMIN (Administrador Global de la Plataforma)
+   * No necesita slug porque gestiona todos los restaurantes.
+   */
+  if (rolUser === 'superadmin') {
+    return redirect('/sa/dashboard');
+  }
 
-  
-  // 1. Administradores
-  if (rolUser === 'admin' || rolUser === 'super_admin') {
+  /**
+   * 2. ADMIN (Dueño/Gerente de un Restaurante específico)
+   */
+  if (rolUser === 'admin') {
     return redirect('/admin/dashboard');
   } 
   
-  // 2. Cocina (Verificamos que el slug no esté vacío)
+  /**
+   * 3. COCINA
+   */
   if (rolUser === 'cocina') {
     if (!userSlug) {
-      console.error("⚠️ Usuario de cocina sin slug de restaurante asignado");
+      console.error("⚠️ Usuario de cocina sin slug asignado");
       return redirect('/unauthorized');
     }
     return redirect(`/cocina/${userSlug}`);
   }
 
-  // 3. Cajero (Verificamos que el slug no esté vacío)
+  /**
+   * 4. CAJERO
+   */
   if (rolUser === 'cajero') {
     if (!userSlug) {
-      console.error("⚠️ Usuario de caja sin slug de restaurante asignado");
+      console.error("⚠️ Usuario de caja sin slug asignado");
       return redirect('/unauthorized');
     }
     return redirect(`/caja/${userSlug}`);
   }
 
-  // Si no cae en ninguno, el rol no es reconocido
-  console.error(`🚫 Rol no reconocido o no configurado: ${rolUser}`);
+  // Si el rol existe pero no está mapeado
+  console.error(`🚫 Acceso denegado para el rol: ${rolUser}`);
   redirect('/unauthorized');
 }

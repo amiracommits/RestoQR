@@ -40,6 +40,29 @@ http://192.168.0.106:3005/tacos-la-luna?mesa=95da1f0e-fd31-486d-97ab-87e8bdca5fd
 mesa 4
 
 
+mesas de cafe afrodita
+id,restaurante_id,numero_mesa,capacidad,created_at,estado
+33ad825a-ad48-46b2-9c0a-03292b64ac35,ca4322d6-15bc-4c86-a883-6e17b7ec4b56,1,2,2026-03-05 19:18:07.188348+00,disponible
+256e4283-cbee-483d-933c-8e8bc47da6f6,ca4322d6-15bc-4c86-a883-6e17b7ec4b56,2,4,2026-03-05 19:18:07.188348+00,disponible
+d9594657-6d04-4372-bfeb-a8cfcb8fb1e1,ca4322d6-15bc-4c86-a883-6e17b7ec4b56,3,4,2026-03-05 19:18:07.188348+00,disponible
+b2f9a676-960d-471f-a814-27d3608f4183,ca4322d6-15bc-4c86-a883-6e17b7ec4b56,4,6,2026-03-05 19:18:07.188348+00,disponible
+9d025957-40fe-41ac-8a87-ab898fda0609,9057b974-0b00-4e92-9095-7ac32a43b093,1,4,2026-03-05 19:27:35.216797+00,disponible
+95da1f0e-fd31-486d-97ab-87e8bdca5fd4,9057b974-0b00-4e92-9095-7ac32a43b093,3,2,2026-03-05 19:27:35.216797+00,disponible
+b3d18217-f595-47fc-8ae2-9128e4d8314c,9057b974-0b00-4e92-9095-7ac32a43b093,4,8,2026-03-05 19:27:35.216797+00,disponible
+efb28ea3-f038-4c13-a94f-39b1fde46524,9057b974-0b00-4e92-9095-7ac32a43b093,2,4,2026-03-05 19:27:35.216797+00,disponible
+daea7d73-3225-4a31-964f-a7dfc042f191,e941985a-617e-4578-be72-58a2370151e8,1,2,2026-04-28 23:01:39.498722+00,disponible
+fa5b851c-e813-478f-9502-b178e7bed5fa,e941985a-617e-4578-be72-58a2370151e8,2,2,2026-04-28 23:01:39.498722+00,disponible
+9c857cad-5d7f-4bc1-a474-b03f61cff2ea,e941985a-617e-4578-be72-58a2370151e8,3,4,2026-04-28 23:01:39.498722+00,disponible
+9122d01e-f631-4d1d-88ec-54ec0b3a6d24,e941985a-617e-4578-be72-58a2370151e8,4,4,2026-04-28 23:01:39.498722+00,disponible
+42866b90-2198-41dd-af27-86e45eb4f653,e941985a-617e-4578-be72-58a2370151e8,5,4,2026-04-28 23:01:39.498722+00,disponible
+7d54673f-ce32-4993-aae7-952bcc90dd2b,e941985a-617e-4578-be72-58a2370151e8,6,6,2026-04-28 23:01:39.498722+00,disponible
+83eea4fb-717e-4d47-826e-c292c299858b,e941985a-617e-4578-be72-58a2370151e8,7,6,2026-04-28 23:01:39.498722+00,disponible
+88d5e4e3-84f0-4c27-8922-8b4564fe7c86,e941985a-617e-4578-be72-58a2370151e8,8,2,2026-04-28 23:01:39.498722+00,disponible
+c0c2fd6c-0e81-409d-afad-a46f495211af,e941985a-617e-4578-be72-58a2370151e8,9,2,2026-04-28 23:01:39.498722+00,disponible
+5e3950cb-49e3-496f-9544-dabe69f478e9,e941985a-617e-4578-be72-58a2370151e8,10,8,2026-04-28 23:01:39.498722+00,disponible
+
+
+
 
 
 -- URL para crear QR de 
@@ -72,3 +95,48 @@ git commit -m "feat algo nuevo"
 #  impactar la rama main
 git push origin main
 
+Prompt para iformacion tributaria
+Informacion triutaria 
+datos a agregar a la tabla de restaurante : 
+RTN del emisor (alfanumerico de quince posiciones)
+Nombre del contribuyente (razon social o nombre del contribuyente que puede no ser el nombre del restaurante obligatoriamente) 
+Direccion (direccion fisica del contribuyente o emisor de facturas)
+numero telefonico
+correo electronico del restaurante o emisor de facturas
+clave de autorizacion de impresion CAI (codigo alfanumerico de 40 posiciones) otorgado por el servicio de hacienda
+Rango autorizado de facturacion, aqui son dos campos, uno para el rango  minimo y otro para el rango maximo
+(es un rango de facturas que se deben obtener tambien otorgado por el servicio de hacienda 
+Ejm 001-002-01-00006901 al 001-002-01-00009400, se debe seguir una serializacion de numero de factura segun el rango de autorizacion, la semilla la posicion 12 de el rango inferior de factura y corresponde a los ocho ultimos numeros del rango inferior de facturacion 001-002-01-XXXXXXXX)
+tambien quiero agregar un campo para subir un logo de restaurante.
+
+Datos a agregar a la tabla facturas 
+Numero de factura (la primera factura generada corresponde al rango minimo de facturas permitidas, 
+las siguientes facturas se tienen que ir serializando a partir del rango inferior 
+Ejm: rango inferior 001-002-01-00006901, entonces la siguiente factura sera 001-002-01-00006902 y la siguiente 001-002-01-00006903 y asi sucesivamente hasta alcanzar el rango superior. 
+)
+Nombre del cliente, por defecto debe decir "CLIENTE FINAL"
+RTN del cliente, solo si el cliente solicita factura con denominacion se debe incluir RTN del cliente final y el nombre del mismo, a menos que se especifique este campo ira vacio
+
+
+Cambios en el encabezado de la facuta. 
+al momento de imprimirse La factura debe contener 
+En este orden la informacion 
+-Logo de el restaurante, se va a proveer un PNG pequeno para incluirlo en el encabezado de la factura 
+-Nombre del contribuyente, campo nuevo en restaurante
+-RTN campo nuevo en restaurante
+-Direccion 
+-Telefono 
+-correo_electronico
+-Codigo CAI 
+-Numero de factura, antepuesto con la palabra FACTURA: 
+
+000-007-00000050 - 000-007-00000100
+
+CAI A7F9K2-XQ4L8M-9ZP3TR-W6N2BY-H8C5DU-3F
+
+id de cafe afrodita 
+e941985a-617e-4578-be72-58a2370151e8
+
+
+
+afrodita-cafe

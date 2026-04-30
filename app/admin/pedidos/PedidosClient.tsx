@@ -1,7 +1,5 @@
 'use client'
 // app/admin/pedidos/PedidosClient.tsx
-// ✅ Client Component — toda la UI interactiva y estado local
-// NO importa actions.ts ni llama a Supabase directamente
 
 import { useState, useMemo } from 'react'
 import { ArrowPathIcon, DocumentArrowDownIcon, EyeIcon } from '@heroicons/react/24/outline'
@@ -9,7 +7,6 @@ import { format } from 'date-fns'
 import { exportarPDF } from '@/utils/exportUtils'
 import { revivirPedidoAction } from './actions'
 
-// --- TIPOS ---
 interface Producto {
   nombre: string
 }
@@ -41,16 +38,13 @@ interface PedidosClientProps {
   pedidosIniciales: Pedido[]
 }
 
-// --- COMPONENTE ---
 export default function PedidosClient({ pedidosIniciales }: PedidosClientProps) {
-  // ✅ Fallback seguro — nunca será undefined
   const [pedidos, setPedidos] = useState<Pedido[]>(pedidosIniciales ?? [])
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [filtroTipo, setFiltroTipo] = useState('todos')
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
 
-  // --- LÓGICA DE FILTRADO (Client Side para respuesta instantánea) ---
   const pedidosFiltrados = useMemo(() => {
     return pedidos
       .filter((p) => {
@@ -72,14 +66,11 @@ export default function PedidosClient({ pedidosIniciales }: PedidosClientProps) 
       )
   }, [pedidos, filtroEstado, filtroTipo, fechaInicio, fechaFin])
 
-  // --- FUNCIÓN PARA "REVIVIR" PEDIDO ---
-  // ✅ Ahora llama a la Server Action importada desde actions.ts
   const revivirPedido = async (id: string) => {
     if (!confirm('¿Deseas devolver este pedido a la cocina?')) return
 
     try {
       await revivirPedidoAction(id)
-      // Si no lanza error, actualizamos el estado local optimistamente
       setPedidos((prev) =>
         prev.map((p) => (p.id === id ? { ...p, estado: 'pendiente' } : p))
       )
@@ -89,139 +80,161 @@ export default function PedidosClient({ pedidosIniciales }: PedidosClientProps) 
     }
   }
 
+  const inputClassName =
+    'rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 text-sm font-medium text-neutral-200 outline-none transition-colors focus:border-[#E85D26] focus:ring-2 focus:ring-[#E85D26]/20'
+
   return (
-    <div className="p-8 bg-slate-50 min-h-screen">
-      {/* HEADER Y FILTROS */}
-      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 mb-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-black text-slate-900 uppercase">
-            Gestión de Pedidos
-          </h1>
+    <div>
+      <div className="mb-8 rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-5 sm:p-6">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-widest text-neutral-600">
+              Historial operativo
+            </p>
+            <h1 className="mt-2 text-2xl font-medium tracking-tight text-neutral-100">
+              Gestión de pedidos
+            </h1>
+          </div>
+
           <button
             onClick={() => exportarPDF(pedidosFiltrados)}
-            className="bg-[#1E389E] text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-800 transition-all"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#E85D26] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-orange-700"
           >
-            <DocumentArrowDownIcon className="w-5 h-5" /> Exportar PDF
+            <DocumentArrowDownIcon className="h-5 w-5" />
+            Exportar PDF
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Selector de Estado */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <select
+            value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value)}
-            className="bg-slate-100 border-none rounded-xl font-bold text-slate-600 p-3"
+            className={inputClassName}
           >
-            <option value="todos">Todos los Estados</option>
+            <option value="todos">Todos los estados</option>
             <option value="pendiente">Pendientes</option>
             <option value="entregado">Completados</option>
             <option value="facturado">Facturados</option>
           </select>
 
-          {/* Selector de Tipo */}
           <select
+            value={filtroTipo}
             onChange={(e) => setFiltroTipo(e.target.value)}
-            className="bg-slate-100 border-none rounded-xl font-bold text-slate-600 p-3"
+            className={inputClassName}
           >
-            <option value="todos">Todos los Tipos</option>
-            <option value="principal">Solo Principales</option>
-            <option value="adicional">Solo Adicionales</option>
+            <option value="todos">Todos los tipos</option>
+            <option value="principal">Solo principales</option>
+            <option value="adicional">Solo adicionales</option>
           </select>
 
-          {/* Date Pickers */}
           <input
             type="date"
+            value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
-            className="bg-slate-100 border-none rounded-xl font-bold text-slate-600 p-3"
+            className={inputClassName}
+            style={{ colorScheme: 'dark' }}
           />
+
           <input
             type="date"
+            value={fechaFin}
             onChange={(e) => setFechaFin(e.target.value)}
-            className="bg-slate-100 border-none rounded-xl font-bold text-slate-600 p-3"
+            className={inputClassName}
+            style={{ colorScheme: 'dark' }}
           />
         </div>
       </div>
 
-      {/* TABLA DE DATOS */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#1a1a1a]">
         {pedidosFiltrados.length === 0 ? (
-          <div className="p-16 text-center text-slate-400 font-bold uppercase tracking-widest text-sm">
+          <div className="p-12 text-center text-sm font-medium uppercase tracking-widest text-neutral-600">
             No se encontraron pedidos con los filtros aplicados
           </div>
         ) : (
-          <table className="w-full text-left">
-            <thead className="bg-slate-900 text-slate-400 uppercase text-[10px] font-black tracking-widest">
-              <tr>
-                <th className="p-5">Fecha/Hora</th>
-                <th className="p-5">Mesa</th>
-                <th className="p-5">Tipo</th>
-                <th className="p-5">Productos</th>
-                <th className="p-5">Total</th>
-                <th className="p-5">Estado</th>
-                <th className="p-5 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {pedidosFiltrados.map((pedido) => (
-                <tr
-                  key={pedido.id}
-                  className="hover:bg-slate-50 transition-colors"
-                >
-                  <td className="p-5 text-xs font-bold text-slate-500">
-                    {format(new Date(pedido.created_at), 'dd/MM/yy HH:mm')}
-                  </td>
-                  <td className="p-5 font-black text-slate-900">
-                    MESA {pedido.mesas?.numero_mesa}
-                  </td>
-                  <td className="p-5">
-                    <span
-                      className={`text-[9px] font-black px-2 py-1 rounded-md ${
-                        pedido.es_adicional
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-emerald-100 text-emerald-700'
-                      }`}
-                    >
-                      {pedido.es_adicional ? 'ADICIONAL' : 'PRINCIPAL'}
-                    </span>
-                  </td>
-                  <td className="p-5 text-xs text-slate-600 max-w-xs truncate">
-                    {pedido.detalle_pedidos
-                      .map((d) => `${d.cantidad}x ${d.productos.nombre}`)
-                      .join(', ')}
-                  </td>
-                  <td className="p-5 font-black text-slate-900 text-sm">
-                    L. {pedido.total.toFixed(2)}
-                  </td>
-                  <td className="p-5">
-                    <span
-                      className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
-                        pedido.estado === 'pendiente'
-                          ? 'bg-blue-100 text-blue-600'
-                          : pedido.estado === 'entregado'
-                          ? 'bg-slate-100 text-slate-500'
-                          : 'bg-orange-100 text-orange-600'
-                      }`}
-                    >
-                      {pedido.estado}
-                    </span>
-                  </td>
-                  <td className="p-5 text-right space-x-2">
-                    {pedido.estado === 'entregado' && (
-                      <button
-                        onClick={() => revivirPedido(pedido.id)}
-                        title="Revivir Pedido"
-                        className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
-                      >
-                        <ArrowPathIcon className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-200">
-                      <EyeIcon className="w-4 h-4" />
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left">
+              <thead className="border-b border-white/[0.06] bg-white/[0.03] text-[10px] font-medium uppercase tracking-widest text-neutral-600">
+                <tr>
+                  <th className="p-5">Fecha/Hora</th>
+                  <th className="p-5">Mesa</th>
+                  <th className="p-5">Tipo</th>
+                  <th className="p-5">Productos</th>
+                  <th className="p-5">Total</th>
+                  <th className="p-5">Estado</th>
+                  <th className="p-5 text-right">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody className="divide-y divide-white/[0.05]">
+                {pedidosFiltrados.map((pedido) => (
+                  <tr
+                    key={pedido.id}
+                    className="transition-colors hover:bg-white/[0.03]"
+                  >
+                    <td className="p-5 text-xs font-medium text-neutral-500">
+                      {format(new Date(pedido.created_at), 'dd/MM/yy HH:mm')}
+                    </td>
+
+                    <td className="p-5 font-semibold text-neutral-100">
+                      MESA {pedido.mesas?.numero_mesa}
+                    </td>
+
+                    <td className="p-5">
+                      <span
+                        className={`rounded-md px-2 py-1 text-[9px] font-semibold uppercase ${
+                          pedido.es_adicional
+                            ? 'border border-amber-500/20 bg-amber-500/10 text-amber-300'
+                            : 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                        }`}
+                      >
+                        {pedido.es_adicional ? 'ADICIONAL' : 'PRINCIPAL'}
+                      </span>
+                    </td>
+
+                    <td className="max-w-xs truncate p-5 text-xs text-neutral-400">
+                      {pedido.detalle_pedidos
+                        .map((d) => `${d.cantidad}x ${d.productos.nombre}`)
+                        .join(', ')}
+                    </td>
+
+                    <td className="p-5 text-sm font-semibold text-neutral-100">
+                      L. {pedido.total.toFixed(2)}
+                    </td>
+
+                    <td className="p-5">
+                      <span
+                        className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
+                          pedido.estado === 'pendiente'
+                            ? 'border border-sky-500/20 bg-sky-500/10 text-sky-300'
+                            : pedido.estado === 'entregado'
+                            ? 'border border-neutral-500/20 bg-neutral-500/10 text-neutral-400'
+                            : 'border border-orange-500/20 bg-orange-500/10 text-orange-300'
+                        }`}
+                      >
+                        {pedido.estado}
+                      </span>
+                    </td>
+
+                    <td className="space-x-2 p-5 text-right">
+                      {pedido.estado === 'entregado' && (
+                        <button
+                          onClick={() => revivirPedido(pedido.id)}
+                          title="Revivir pedido"
+                          className="rounded-lg border border-sky-500/20 bg-sky-500/10 p-2 text-sky-300 transition-colors hover:bg-sky-500/20"
+                        >
+                          <ArrowPathIcon className="h-4 w-4" />
+                        </button>
+                      )}
+
+                      <button className="rounded-lg border border-white/[0.07] bg-white/[0.04] p-2 text-neutral-500 transition-colors hover:bg-white/[0.08] hover:text-neutral-200">
+                        <EyeIcon className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

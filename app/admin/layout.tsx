@@ -6,14 +6,14 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* El Menú Lateral persistente */}
+    <div className="min-h-screen bg-[#0f0f0f] text-neutral-100">
       <Sidebar />
 
-      {/* El contenido dinámico de cada página */}
-      <div className="flex-1 overflow-y-auto">
-        {children}
-      </div>
+      <main className="min-h-screen pb-24 md:pb-0 md:pl-72">
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+          {children}
+        </div>
+      </main>
     </div>
   )
 }

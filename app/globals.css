@@ -5,6 +5,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --color-surface-0: #0f0f0f;   /* fondo base */
+  --color-surface-1: #1a1a1a;   /* cards */
+  --color-surface-2: #222222;   /* hover / filas */
+  --color-border:    rgba(255,255,255,0.07);
+  --color-accent:    #E85D26;   /* naranja ZNT */
+  --color-muted:     #888888;
 }
 
 @theme inline {

@@ -166,55 +166,48 @@ export default function CajaDashboard({
         ))}
       </div>
 
-      {/* MODAL DE TICKET (Mismo diseño, data de Factura) */}
-      {facturaParaCobrar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm print:static print:bg-white print:p-0">
-          {/* ... Aquí pones el modal que ya diseñaste, usando facturaParaCobrar ... */}
-          <div className="bg-white w-[300px] p-6 shadow-2xl print:w-[80mm]">
-            <div className="text-center font-mono text-xs text-black">
-              <h2 className="text-lg font-black uppercase mb-1">
-                {restaurante.nombre}
-              </h2>
-              <p className="border-t border-dashed border-black my-2"></p>
-              <table className="w-full mb-4">
-                <tbody>
-                  {facturaParaCobrar.detalle_facturas.map(
-                    (det: DetalleFactura) => (
-                      <tr key={det.id}>
-                        <td className="text-left">
-                          {det.cantidad}x {det.productos.nombre}
-                        </td>
-                        <td className="text-right">
-                          {det.subtotal.toFixed(2)}
-                        </td>
-                      </tr>
-                    ),
-                  )}
-                </tbody>
-              </table>
-              <div className="border-t border-black pt-2 flex justify-between text-base font-black">
-                <span>TOTAL</span>
-                <span>L. {facturaParaCobrar.total.toFixed(2)}</span>
-              </div>
-            </div>
-            <div className="mt-8 flex flex-col gap-2 print:hidden">
-              <button
-                onClick={() => handleGenerarFactura(facturaParaCobrar.id)}
-                className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg"
-              >
-                🖨️ Imprimir
-              </button>
-              <button
-                onClick={handleConfirmarPago}
-                disabled={procesando}
-                className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg"
-              >
-                {procesando ? "Procesando..." : "✅ Confirmar y Liberar Mesa"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </main>
-  );
+      {/* MODAL DE TICKET */}
+{facturaParaCobrar && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm print:hidden">
+    {/* Contenedor relativo para posicionar la X */}
+    <div className="relative bg-white w-[300px] p-6 shadow-2xl rounded-xl">
+      
+      {/* ❌ BOTÓN CERRAR (La X flotante) */}
+      <button 
+        onClick={() => setFacturaParaCobrar(null)}
+        className="absolute -top-3 -right-3 bg-red-500 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 font-bold z-[60]"
+        title="Cerrar"
+      >
+        ✕
+      </button>
+
+      {/* Contenido del ticket */}
+      <div className="text-center font-mono text-xs text-black">
+        <h2 className="text-lg font-black uppercase mb-1">
+          {restaurante.nombre}
+        </h2>
+        {/* ... resto de tu tabla y totales ... */}
+      </div>
+
+      <div className="mt-8 flex flex-col gap-2">
+        <button
+          onClick={() => handleGenerarFactura(facturaParaCobrar.id)}
+          className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg"
+        >
+          🖨️ Imprimir
+        </button>
+        <button
+          onClick={handleConfirmarPago}
+          disabled={procesando}
+          className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg"
+        >
+          {procesando ? "Procesando..." : "✅ Confirmar y Liberar Mesa"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+</main>
+);
 }
+

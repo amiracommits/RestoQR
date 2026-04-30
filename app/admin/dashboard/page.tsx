@@ -1,6 +1,13 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import {
+  ArrowTopRightOnSquareIcon,
+  ChartBarIcon,
+  FolderIcon,
+  PlusIcon,
+  ShoppingBagIcon,
+} from '@heroicons/react/24/outline'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -16,9 +23,11 @@ export default async function DashboardPage() {
 
   if (!perfil) {
     return (
-      <div className="p-10">
-        <h1 className="text-red-500 font-bold">Error: Perfil no encontrado</h1>
-        <p className="mt-4">ID de usuario: <code className="bg-slate-100 p-1">{user.id}</code></p>
+      <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6">
+        <h1 className="font-semibold text-red-300">Error: Perfil no encontrado</h1>
+        <p className="mt-4 text-sm text-neutral-400">
+          ID de usuario: <code className="rounded bg-white/[0.06] px-2 py-1 font-mono text-neutral-200">{user.id}</code>
+        </p>
       </div>
     )
   }
@@ -31,74 +40,89 @@ export default async function DashboardPage() {
   ])
 
   const stats = [
-    { name: 'Categorías', value: categoriasCount.count || 0, icon: '📂', color: 'bg-blue-500' },
-    { name: 'Productos Activos', value: productosCount.count || 0, icon: '🍔', color: 'bg-orange-500' },
-    { name: 'Visitas (Hoy)', value: 'Proximamente', icon: '📈', color: 'bg-emerald-500' },
+    { name: 'Categorías', value: categoriasCount.count || 0, icon: FolderIcon, tone: 'text-sky-300 bg-sky-500/10 border-sky-500/20' },
+    { name: 'Productos activos', value: productosCount.count || 0, icon: ShoppingBagIcon, tone: 'text-orange-300 bg-orange-500/10 border-orange-500/20' },
+    { name: 'Visitas hoy', value: 'Próximamente', icon: ChartBarIcon, tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20' },
   ]
 
-  // NOTA: Ya no necesitamos el <aside> ni el contenedor flex externo
-  // El Layout global ya nos da el Sidebar y el fondo gris.
   return (
-    <div className="p-8 max-w-6xl mx-auto">
-      <header className="mb-10 flex justify-between items-end">
+    <div>
+      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+          <p className="text-xs font-medium uppercase tracking-widest text-neutral-600">
+            Panel de administración
+          </p>
+          <h1 className="mt-2 text-2xl font-medium tracking-tight text-neutral-100 sm:text-3xl">
             Bienvenido, {perfil.nombre_usuario || 'Admin'}
           </h1>
-          <p className="text-slate-500 mt-1 italic">Gestionando: {restaurante.nombre}</p>
+          <p className="mt-1 text-sm text-neutral-500">Gestionando: {restaurante.nombre}</p>
         </div>
-        <div className="text-sm font-medium text-slate-400 bg-white px-4 py-2 rounded-full border border-slate-200">
+        <div className="w-fit rounded-full border border-white/[0.07] bg-white/[0.04] px-4 py-2 text-sm font-medium text-neutral-400">
           {new Date().toLocaleDateString('es-HN', { weekday: 'long', day: 'numeric', month: 'long' })}
         </div>
       </header>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {stats.map((item) => (
-          <div key={item.name} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5">
-            <div className={`w-14 h-14 ${item.color} rounded-2xl flex items-center justify-center text-2xl shadow-lg`}>
-              {item.icon}
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">{item.name}</p>
-              <p className="text-2xl font-bold text-slate-900">{item.value}</p>
+          <div key={item.name} className="rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-5">
+            <div className="flex items-center gap-4">
+              <div className={`flex h-12 w-12 items-center justify-center rounded-xl border ${item.tone}`}>
+                <item.icon className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-neutral-500">{item.name}</p>
+                <p className="mt-1 text-2xl font-semibold tracking-tight text-neutral-100">{item.value}</p>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-          <h3 className="text-xl font-bold text-slate-900 mb-6">Acciones Rápidas</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <Link href="/admin/productos/nuevo" className="p-4 border-2 border-dashed border-slate-200 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all text-center group">
-              <span className="text-2xl block mb-2 group-hover:scale-110 transition-transform">➕</span>
-              <span className="text-sm font-bold text-slate-700">Nuevo Producto</span>
-            </Link>
-            <Link href="/admin/categorias" className="p-4 border-2 border-dashed border-slate-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 transition-all text-center group">
-              <span className="text-2xl block mb-2 group-hover:scale-110 transition-transform">📂</span>
-              <span className="text-sm font-bold text-slate-700">Editar Categorías</span>
-            </Link>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-8 rounded-3xl text-white shadow-xl flex flex-col justify-between">
-          <div>
-            <h3 className="text-xl font-bold mb-4">Estado del Menú 🌐</h3>
-            <p className="text-slate-300 leading-relaxed mb-6">
-              Tu menú público está activo en la ruta: <br/>
-              <code className="text-orange-400 font-mono">/{restaurante.slug}</code>
-            </p>
-            <Link 
-              href={`/${restaurante.slug}`} 
-              target="_blank"
-              className="inline-block w-full py-3 bg-orange-600 text-center rounded-xl font-bold hover:bg-orange-500 transition-colors"
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section className="rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-5 sm:p-6">
+          <h2 className="text-lg font-medium text-neutral-100">Acciones rápidas</h2>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Link
+              href="/admin/productos/nuevo"
+              className="group rounded-xl border border-dashed border-white/[0.12] bg-white/[0.03] p-4 transition-colors hover:border-orange-500/50 hover:bg-orange-500/10"
             >
-              Ver Menú en Vivo
+              <PlusIcon className="h-6 w-6 text-[#E85D26] transition-transform group-hover:scale-110" />
+              <span className="mt-4 block text-sm font-medium text-neutral-100">Nuevo producto</span>
+              <span className="mt-1 block text-xs text-neutral-500">Agrega un platillo al menú</span>
+            </Link>
+            <Link
+              href="/admin/categorias"
+              className="group rounded-xl border border-dashed border-white/[0.12] bg-white/[0.03] p-4 transition-colors hover:border-sky-500/50 hover:bg-sky-500/10"
+            >
+              <FolderIcon className="h-6 w-6 text-sky-300 transition-transform group-hover:scale-110" />
+              <span className="mt-4 block text-sm font-medium text-neutral-100">Editar categorías</span>
+              <span className="mt-1 block text-xs text-neutral-500">Ordena las secciones visibles</span>
             </Link>
           </div>
-        </div>
+        </section>
+
+        <section className="flex min-h-64 flex-col justify-between rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-5 sm:p-6">
+          <div>
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-lg font-medium text-neutral-100">Estado del menú</h2>
+              <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+                Activo
+              </span>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-neutral-500">
+              Tu menú público está disponible en la ruta{' '}
+              <code className="rounded bg-white/[0.05] px-2 py-1 font-mono text-orange-300">/{restaurante.slug}</code>
+            </p>
+          </div>
+          <Link
+            href={`/${restaurante.slug}`}
+            target="_blank"
+            className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-[#E85D26] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-orange-700"
+          >
+            Ver menú en vivo
+            <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+          </Link>
+        </section>
       </div>
     </div>
   )

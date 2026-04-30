@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
-import FormularioProducto from './FormularioProducto' // Crearemos este archivo ahora
+import FormularioProducto from './FormularioProducto' 
 
 export default async function NuevoProductoPage() {
   const supabase = await createClient()
@@ -26,7 +26,7 @@ export default async function NuevoProductoPage() {
     .order('nombre')
 
   return (
-    <main className="min-h-screen bg-slate-50 p-8">
+    <main>
       <FormularioProducto categorias={categorias || []} />
     </main>
   )
