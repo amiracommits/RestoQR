@@ -20,6 +20,7 @@ export default async function PaginaImpresion({
       rtn_cliente,
       created_at,
       total,
+      numero_pedido_amigable,
       mesas (numero_mesa),
       restaurantes (
         razon_social,
@@ -98,6 +99,13 @@ export default async function PaginaImpresion({
           <p className="text-sm font-black mt-2">
             FACTURA: {factura.numero_factura || '000-000-00-00000000'}
           </p>
+
+          {/* 9. Numero de pedido amigable */}
+          <p className="text-[11px] font-bold uppercase">
+            PEDIDO # {factura.numero_pedido_amigable ?? "S/N"}
+          </p>
+
+
         </div>
 
         {/* --- DATOS DEL CLIENTE Y MESA --- */}

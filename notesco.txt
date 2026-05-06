@@ -62,11 +62,18 @@ c0c2fd6c-0e81-409d-afad-a46f495211af,e941985a-617e-4578-be72-58a2370151e8,9,2,20
 5e3950cb-49e3-496f-9544-dabe69f478e9,e941985a-617e-4578-be72-58a2370151e8,10,8,2026-04-28 23:01:39.498722+00,disponible
 
 
+http://192.168.0.106:3005/tacos-la-luna?mesa=95da1f0e-fd31-486d-97ab-87e8bdca5fd4
+
+
+URL de afrodita
+http://192.168.0.105:3005/afrodita-cafe?mesa=fa5b851c-e813-478f-9502-b178e7bed5fa
+http://192.168.0.105:3005/afrodita-cafe?mesa=88d5e4e3-84f0-4c27-8922-8b4564fe7c86
+
 
 
 
 -- URL para crear QR de 
-http://192.168.0.103:3005/kandil-pizza?mesa=b2f9a676-960d-471f-a814-27d3608f4183
+http://192.168.0.105:3005/kandil-pizza?mesa=b2f9a676-960d-471f-a814-27d3608f4183
 
 
 IP de mi hause
@@ -137,6 +144,29 @@ CAI A7F9K2-XQ4L8M-9ZP3TR-W6N2BY-H8C5DU-3F
 id de cafe afrodita 
 e941985a-617e-4578-be72-58a2370151e8
 
-
-
+slug
 afrodita-cafe
+
+
+
+que se vea el numero de pedido en la tarjeta cocina dashboard de cocina
+que se vea el numero de pedido en la tarjeta de caja dashboard de caja 
+que aparezca pedido numero tal en la factura 
+
+
+
+issue: numero de factura esta quedando null
+implementar forma de pago en la tabla facturas.
+Tabla global para parametros de impuesto 
+Implementar calculo de impuesto ISV al generar la factura.
+reflejar calculo de impuesto ISV normal y gravamen especial en la factura.
+
+implementar opcion de cierre de caja 
+it must: mostrar una pantalla previa de resultados con el detalle de las facturas desde la numero uno hasta la ultima generada 
+por campo numero_pedido_amigable de la tabla factura. 
+debe sumarizar por tipo de venta y sumarizar el total general. 
+Se debe ejecutar un RCP a supabase para reiniciar contadores de pedidos a cero. 
+y dejar registro en una tabla especial para arqueos.
+
+
+

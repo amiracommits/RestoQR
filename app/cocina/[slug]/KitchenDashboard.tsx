@@ -20,6 +20,7 @@ interface Pedido {
   estado: string;
   es_adicional: boolean;
   mesa_id: string;
+  numero_pedido_dia?: number | null; // 👈 para numero de pedido
   mesas: { numero_mesa: string };
   detalle_pedidos: DetallePedido[];
 }
@@ -220,20 +221,27 @@ export default function KitchenDashboard({
               className={`bg-slate-800/50 rounded-3xl border-4 overflow-hidden flex flex-col shadow-2xl transition-all duration-500 ${borderStyle}`}
             >
               {/* Mantenemos tu estructura de tarjeta que ya es perfecta */}
-              <div className="bg-slate-700/50 p-4 flex justify-between items-center border-b border-slate-700">
-                <div className="flex flex-col">
-                  <span className="text-2xl font-black text-white">
-                    MESA {pedido.mesas?.numero_mesa || "S/N"}
-                  </span>
-                  <span className="text-[10px] font-black text-slate-400 bg-slate-900/50 px-2 py-0.5 rounded mt-1 self-start">
-                    HACE{" "}
-                    {Math.floor(
-                      (ahora - new Date(pedido.created_at).getTime()) / 60000,
-                    )}{" "}
-                    MIN
-                  </span>
-                </div>
+              <div className="bg-slate-700/50 p-4 flex justify-between items-start border-b border-slate-700 gap-3">
+              <div className="shrink-0">
+                <span className="inline-flex items-center rounded-lg bg-orange-600 px-2.5 py-1 text-[11px] font-black text-white">
+                  PEDIDO # {pedido.numero_pedido_dia ?? "S/N"}
+                </span>
               </div>
+
+              <div className="flex flex-col items-end">
+                <span className="text-2xl font-black text-white">
+                  MESA {pedido.mesas?.numero_mesa || "S/N"}
+                </span>
+                <span className="text-[10px] font-black text-slate-400 bg-slate-900/50 px-2 py-0.5 rounded mt-1">
+                  HACE{" "}
+                  {Math.floor(
+                    (ahora - new Date(pedido.created_at).getTime()) / 60000,
+                  )}{" "}
+                  MIN
+                </span>
+              </div>
+            </div>
+
 
               {/* Badges de Tipo */}
               <div className="flex items-center justify-center gap-2 mt-3 mb-2">

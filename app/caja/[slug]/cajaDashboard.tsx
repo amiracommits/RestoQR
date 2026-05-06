@@ -16,6 +16,10 @@ export default function CajaDashboard({
     null,
   );
   const [procesando, setProcesando] = useState(false);
+  
+  //estado para confirmar si ya se imprimio
+  const [impresionConfirmada, setImpresionConfirmada] = useState(false) 
+
 
   const supabase = createClient();
   const router = useRouter();
@@ -94,6 +98,20 @@ export default function CajaDashboard({
     window.open(url, "_blank", "width=400,height=600");
   };
 
+
+  const handleImprimirYHabilitarCierre = async () => {
+  if (!facturaParaCobrar) return
+
+  try {
+    await handleGenerarFactura(facturaParaCobrar.id)
+    setImpresionConfirmada(true)
+  } catch (error) {
+    console.error(error)
+    setImpresionConfirmada(false)
+  }
+}
+
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -157,7 +175,12 @@ export default function CajaDashboard({
             </div>
 
             <button
-              onClick={() => setFacturaParaCobrar(fac)}
+              onClick={
+                () => {
+                  setImpresionConfirmada(false)
+                  setFacturaParaCobrar(fac)
+                }   
+              }
               className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-3 rounded-xl transition-all uppercase tracking-widest text-xs"
             >
               Generar Factura
@@ -166,7 +189,7 @@ export default function CajaDashboard({
         ))}
       </div>
 
-      {/* MODAL DE TICKET */}
+{/* MODAL DE TICKET */}
 {facturaParaCobrar && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm print:hidden">
     {/* Contenedor relativo para posicionar la X */}
@@ -174,7 +197,11 @@ export default function CajaDashboard({
       
       {/* ❌ BOTÓN CERRAR (La X flotante) */}
       <button 
-        onClick={() => setFacturaParaCobrar(null)}
+        onClick={() => {
+        setFacturaParaCobrar(null)
+        setImpresionConfirmada(false)
+      }}
+
         className="absolute -top-3 -right-3 bg-red-500 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 font-bold z-[60]"
         title="Cerrar"
       >
@@ -186,22 +213,26 @@ export default function CajaDashboard({
         <h2 className="text-lg font-black uppercase mb-1">
           {restaurante.nombre}
         </h2>
-        {/* ... resto de tu tabla y totales ... */}
       </div>
 
       <div className="mt-8 flex flex-col gap-2">
         <button
-          onClick={() => handleGenerarFactura(facturaParaCobrar.id)}
+          onClick={handleImprimirYHabilitarCierre}
           className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg"
         >
           🖨️ Imprimir
         </button>
+
         <button
           onClick={handleConfirmarPago}
-          disabled={procesando}
-          className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg"
+          disabled={procesando || !impresionConfirmada}
+          className={`w-full font-bold py-3 rounded-lg text-white ${
+            procesando || !impresionConfirmada
+              ? 'bg-emerald-600/50 cursor-not-allowed'
+              : 'bg-emerald-600 hover:bg-emerald-700'
+          }`}
         >
-          {procesando ? "Procesando..." : "✅ Confirmar y Liberar Mesa"}
+          {procesando ? 'Procesando...' : '✅ Confirmar y Liberar Mesa'}
         </button>
       </div>
     </div>
@@ -210,4 +241,6 @@ export default function CajaDashboard({
 </main>
 );
 }
+
+
 
