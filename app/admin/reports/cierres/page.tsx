@@ -123,6 +123,10 @@ export default async function CierresReportPage({
     (a, b) => Number(b.cantidad_facturas ?? 0) - Number(a.cantidad_facturas ?? 0),
   )[0]
 
+  const restaurantePerfil = Array.isArray(perfil?.restaurantes)
+  ? perfil.restaurantes[0]
+  : perfil?.restaurantes;
+
   return (
     <div>
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -132,7 +136,7 @@ export default async function CierresReportPage({
             Cierres de Caja
           </h1>
           <p className="mt-1 text-sm text-neutral-500">
-            {perfil.restaurantes?.nombre || 'Restaurante'} · consolidado de cierres ejecutados
+            {restaurantePerfil?.nombre || 'Restaurante'} · consolidado de cierres ejecutados
           </p>
         </div>
         <DateRangeFilters defaultFrom={normalizedFrom} defaultTo={normalizedTo} />

@@ -130,6 +130,10 @@ export default async function VentasReportPage({
 
   const maxCantidad = topProductos[0]?.cantidad || 1
 
+  const restaurantePerfil = Array.isArray(perfil?.restaurantes)
+  ? perfil.restaurantes[0]
+  : perfil?.restaurantes;
+
   return (
     <div>
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -139,7 +143,7 @@ export default async function VentasReportPage({
             Ventas
           </h1>
           <p className="mt-1 text-sm text-neutral-500">
-            {perfil.restaurantes?.nombre || 'Restaurante'} · datos de facturas pagadas/cerradas
+            {restaurantePerfil?.nombre || 'Restaurante'} · datos de facturas pagadas/cerradas
           </p>
         </div>
         <DateRangeFilters defaultFrom={normalizedFrom} defaultTo={normalizedTo} />
