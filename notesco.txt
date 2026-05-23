@@ -62,22 +62,19 @@ c0c2fd6c-0e81-409d-afad-a46f495211af,e941985a-617e-4578-be72-58a2370151e8,9,2,20
 5e3950cb-49e3-496f-9544-dabe69f478e9,e941985a-617e-4578-be72-58a2370151e8,10,8,2026-04-28 23:01:39.498722+00,disponible
 
 
-http://192.168.0.106:3005/tacos-la-luna?mesa=95da1f0e-fd31-486d-97ab-87e8bdca5fd4
 
 
 URL de afrodita
-http://192.168.0.105:3005/afrodita-cafe?mesa=fa5b851c-e813-478f-9502-b178e7bed5fa
-http://192.168.0.105:3005/afrodita-cafe?mesa=88d5e4e3-84f0-4c27-8922-8b4564fe7c86
+http://192.168.1.8:3005/afrodita-cafe?mesa=88d5e4e3-84f0-4c27-8922-8b4564fe7c86
+http://192.168.1.8:3005/afrodita-cafe?mesa=33ad825a-ad48-46b2-9c0a-03292b64ac35
 
 
 
-
--- URL para crear QR de 
-http://192.168.0.105:3005/kandil-pizza?mesa=b2f9a676-960d-471f-a814-27d3608f4183
 
 
 IP de mi hause
-192.168.0.103 
+192.168.0.101
+
 192.168.0.106 Lenovo
 
 usuario de cocina de tacos la luna 
@@ -89,6 +86,8 @@ ip de rooster coffee kavala
 Ip de kaleo caffe 
 192.168.58.119
 
+ip de harvest 
+192.168.1.78
 
 
 comandos de git 
@@ -156,7 +155,11 @@ que aparezca pedido numero tal en la factura
 
 
 issue: numero de factura esta quedando null
+
+
+
 implementar forma de pago en la tabla facturas.
+
 Tabla global para parametros de impuesto 
 Implementar calculo de impuesto ISV al generar la factura.
 reflejar calculo de impuesto ISV normal y gravamen especial en la factura.

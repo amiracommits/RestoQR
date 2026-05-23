@@ -1,6 +1,7 @@
 "use server";
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 /**
  * Finaliza el ciclo completo de una mesa:
@@ -8,24 +9,58 @@ import { revalidatePath } from "next/cache";
  * 2. Libera la mesa (disponible).
  * 3. Marca todos los pedidos asociados como pagados.
  */
-export async function finalizarPedidoCompleto(facturaId: string, slug: string) {
+export async function finalizarPedidoCompleto(
+  facturaId: string,
+  slug: string,
+  formaPago: "efectivo" | "tarjeta" | "transferencia",
+) {
   const supabase = await createClient();
 
-  // Ejecutamos el RPC que centraliza toda la lógica transaccional en la DB
-  const { error } = await supabase.rpc("finalizar_cuenta_mesa", {
-    target_factura_id: facturaId,
-  });
+
+
+
+  //  Cerrar cuenta (RPC)
+const { error } = await supabase.rpc("finalizar_cuenta_mesa", {
+  target_factura_id: facturaId,
+  p_forma_pago: formaPago,
+});
 
   if (error) {
-    console.error(
-      "❌ Error al ejecutar RPC finalizar_cuenta_mesa:",
-      error.message,
-    );
+    console.error("❌ Error al ejecutar RPC finalizar_cuenta_mesa:", error.message);
     return { success: false, error: error.message };
   }
 
-  // Refrescamos la ruta para que los cambios se reflejen en el Dashboard de Caja
   revalidatePath(`/caja/${slug}`);
+  revalidatePath(`/caja/${slug}/cierre`);
 
   return { success: true };
+}
+
+export async function ejecutarCierreCaja(formData: FormData): Promise<void> {
+  const restauranteId = formData.get("restaurante_id") as string;
+  const slug = formData.get("slug") as string;
+
+  if (!restauranteId || !slug) {
+    throw new Error("Datos incompletos para cierre de caja.");
+  }
+
+  const supabase = await createClient();
+
+  const { data: cierreId, error } = await supabase.rpc("cerrar_caja_restaurante", {
+    p_restaurante_id: restauranteId,
+  });
+
+  if (error) {
+    console.error("❌ Error al ejecutar RPC cerrar_caja_restaurante:", error.message);
+    throw new Error(error.message);
+  }
+  
+
+  revalidatePath(`/caja/${slug}`);
+  revalidatePath(`/caja/${slug}/cierre`);
+  if (cierreId) {
+    redirect(`/caja/${slug}/cierre/confirmacion?cierre=${cierreId}`);
+  }
+
+  redirect(`/caja/${slug}/cierre/confirmacion`);
 }

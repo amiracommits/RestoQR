@@ -10,7 +10,7 @@ export default async function PaginaImpresion({
   const { id } = await params;
   const supabase = await createClient();
 
-  // 1. Traemos la factura con la nueva metadata tributaria de DEI
+  // 1. Traemos la factura con la nueva metadata tributaria de la DEI
   const { data: factura } = await supabase
     .from("facturas")
     .select(`
@@ -42,6 +42,13 @@ export default async function PaginaImpresion({
     .single();
 
   if (!factura) return notFound();
+  
+  //calculos de impuesto
+  const impuestoNormal = Number(factura.impuesto_iva_normal ?? 0);
+  const impuestoEspecial = Number(factura.impuesto_iva_especial ?? 0);
+  const impuestoTotal = impuestoNormal + impuestoEspecial;
+  const subtotalSinImpuesto = Number(factura.total ?? 0) - impuestoTotal;
+
 
   return (
     <div className="bg-white min-h-screen p-4 flex justify-center">
@@ -140,13 +147,31 @@ export default async function PaginaImpresion({
           </tbody>
         </table>
 
-        {/* --- TOTALES --- */}
-        <div className="border-t-2 border-black pt-2 space-y-1">
-          <div className="flex justify-between font-black text-sm">
-            <span>TOTAL A PAGAR</span>
-            <span>L. {factura.total.toFixed(2)}</span>
-          </div>
+      {/* --- CALCULO DE TOTALES --- */}
+      <div className="border-t-2 border-black pt-2 space-y-1">
+        <div className="flex justify-between text-[11px]">
+          <span>SUBTOTAL (SIN ISV)</span>
+          <span>L. {subtotalSinImpuesto.toFixed(2)}</span>
         </div>
+
+        <div className="flex justify-between text-[11px]">
+          <span>VALOR ISV NORMAL (15%)</span>
+          <span>L. {impuestoNormal.toFixed(2)}</span>
+        </div>
+
+        <div className="flex justify-between text-[11px]">
+          <span>VALOR ISV ESPECIAL (18%)</span>
+          <span>L. {impuestoEspecial.toFixed(2)}</span>
+        </div>
+
+        <div className="border-t border-black my-1"></div>
+
+        <div className="flex justify-between font-black text-sm">
+          <span>TOTAL A PAGAR</span>
+          <span>L. {Number(factura.total ?? 0).toFixed(2)}</span>
+        </div>
+      </div>
+
 
         {/* --- PIE DE PÁGINA --- */}
         <div className="mt-8 text-center space-y-2">

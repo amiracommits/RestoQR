@@ -4,13 +4,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   ArrowRightOnRectangleIcon,
+  ChevronDownIcon,
   Cog6ToothIcon,
   FolderIcon,
   HomeIcon,
   ShoppingBagIcon,
   ClipboardDocumentListIcon,
-  BoltIcon
+  BoltIcon,
 } from '@heroicons/react/24/outline'
+import { useState } from 'react'
 
 const menuItems = [
   { nombre: 'Panel', href: '/admin/dashboard', icon: HomeIcon },
@@ -18,12 +20,16 @@ const menuItems = [
   { nombre: 'Productos', href: '/admin/productos', icon: ShoppingBagIcon },
   { nombre: 'Categorías', href: '/admin/categorias', icon: FolderIcon },
   { nombre: 'Config', href: '/admin/config', icon: Cog6ToothIcon },
-  { nombre: 'Reportes', href: '/admin/reports', icon: BoltIcon},
-  
+]
+
+const reportSubItems = [
+  { nombre: 'Ventas', href: '/admin/reports/ventas' },
+  { nombre: 'Cierres', href: '/admin/reports/cierres' },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const [reportsOpen, setReportsOpen] = useState(pathname.startsWith('/admin/reports'))
 
   return (
     <>
@@ -81,6 +87,46 @@ export default function Sidebar() {
               </Link>
             )
           })}
+
+          <div className="pt-1">
+            <button
+              onClick={() => setReportsOpen((prev) => !prev)}
+              className={`group flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                pathname.startsWith('/admin/reports')
+                  ? 'bg-[#E85D26] text-white'
+                  : 'text-neutral-500 hover:bg-white/[0.04] hover:text-neutral-100'
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <BoltIcon className="h-5 w-5 shrink-0" />
+                <span>Reportes</span>
+              </span>
+              <ChevronDownIcon
+                className={`h-4 w-4 transition-transform ${reportsOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {reportsOpen && (
+              <div className="mt-1 space-y-1 pl-4">
+                {reportSubItems.map((item) => {
+                  const isActive = pathname.startsWith(item.href)
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center rounded-lg px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                        isActive
+                          ? 'bg-orange-500/20 text-orange-300'
+                          : 'text-neutral-500 hover:bg-white/[0.04] hover:text-neutral-200'
+                      }`}
+                    >
+                      {item.nombre}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </nav>
 
         <div className="border-t border-white/[0.07] p-4">
@@ -95,8 +141,8 @@ export default function Sidebar() {
       </aside>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.07] bg-[#111111]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl md:hidden">
-        <div className="grid grid-cols-5 gap-1">
-          {menuItems.map((item) => {
+        <div className="grid grid-cols-6 gap-1">
+          {[...menuItems, { nombre: 'Reportes', href: '/admin/reports/ventas', icon: BoltIcon }].map((item) => {
             const isActive = pathname.startsWith(item.href)
             const Icon = item.icon
 

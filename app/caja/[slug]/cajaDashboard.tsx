@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { finalizarPedidoCompleto } from "./actions";
 import { CajaDashboardProps, Factura, DetalleFactura } from "./types"; // 👈 Tipos externos
 
+type FormaPago = "efectivo" | "tarjeta" | "transferencia";
+
 export default function CajaDashboard({
   restaurante,
   facturasIniciales,
@@ -19,6 +21,9 @@ export default function CajaDashboard({
   
   //estado para confirmar si ya se imprimio
   const [impresionConfirmada, setImpresionConfirmada] = useState(false) 
+  //estado para bloquear cierre mientras ejecuta
+  const [validandoCierre, setValidandoCierre] = useState(false);
+  const [formaPago, setFormaPago] = useState<FormaPago | "">("");
 
 
   const supabase = createClient();
@@ -55,15 +60,22 @@ export default function CajaDashboard({
 
   const handleConfirmarPago = async () => {
     if (!facturaParaCobrar) return;
+    if (!formaPago) {
+      alert("Selecciona una forma de pago antes de confirmar.");
+      return;
+    }
     setProcesando(true);
     try {
       const result = await finalizarPedidoCompleto(
         facturaParaCobrar.id,
         restaurante.slug,
+        formaPago as FormaPago,
       );
 
       if (result.success) {
         setFacturaParaCobrar(null);
+        setFormaPago("");
+        setImpresionConfirmada(false);
       } else {
         alert("Error: " + result.error);
       }
@@ -88,7 +100,7 @@ export default function CajaDashboard({
     // Puedes crear una ruta como /caja/[slug]/imprimir/[id]
     window.open(`/caja/${restaurante.slug}/imprimir/${factura.id}`, "_blank");
 
-    await finalizarPedidoCompleto(factura.id, factura.mesas.id);
+    await finalizarPedidoCompleto(factura.id, restaurante.slug, "efectivo");
     setProcesando(false);
   };
 
@@ -111,6 +123,48 @@ export default function CajaDashboard({
   }
 }
 
+const handleIrACierre = async () => {
+  setValidandoCierre(true);
+  try {
+    // 1) Debe existir al menos una pagada
+    const { count: pagadasCount, error: pagadasError } = await supabase
+      .from("facturas")
+      .select("id", { count: "exact", head: true })
+      .eq("restaurante_id", restaurante.id)
+      .eq("estado", "pagada");
+
+    if (pagadasError) throw pagadasError;
+
+    if (!pagadasCount || pagadasCount < 1) {
+      alert("No hay facturas pagadas para ejecutar un cierre de caja.");
+      return;
+    }
+
+    // 2) No debe existir ninguna generada (pendiente)
+    const { count: generadasCount, error: generadasError } = await supabase
+      .from("facturas")
+      .select("id", { count: "exact", head: true })
+      .eq("restaurante_id", restaurante.id)
+      .eq("estado", "generada");
+
+    if (generadasError) throw generadasError;
+
+    if ((generadasCount ?? 0) > 0) {
+      alert("Se deben cerrar todas las facturas pendientes hasta el momento.");
+      return;
+    }
+
+    // OK -> ir a pantalla de cierre
+    router.push(`/caja/${restaurante.slug}/cierre`);
+  } catch (error: any) {
+    console.error("Error validando cierre de caja:", error?.message || error);
+    alert("No se pudo validar el cierre de caja. Inténtalo nuevamente.");
+  } finally {
+    setValidandoCierre(false);
+  }
+};
+
+
 
   useEffect(() => {
     setMounted(true);
@@ -121,11 +175,29 @@ export default function CajaDashboard({
 
   return (
     <main className="min-h-screen bg-slate-900 p-6 print:p-0">
-      <header className="flex justify-between items-start mb-8 border-b border-slate-800 pb-4 print:hidden">
-        <div>
-          <h1 className="text-3xl font-black text-orange-500 uppercase tracking-tight">
-            Box de Caja: {restaurante?.nombre || "Cargando..."}
-          </h1>
+      <header className="mb-8 flex items-start justify-between border-b border-slate-800 pb-4 print:hidden">
+        <div className="flex items-start gap-4">
+          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.08] bg-slate-800/70">
+            {restaurante?.logo_url ? (
+              <img
+                src={restaurante.logo_url}
+                alt={`Logo ${restaurante?.nombre || "restaurante"}`}
+                className="h-full w-full object-contain p-2"
+              />
+            ) : (
+              <span className="text-xs font-black uppercase tracking-widest text-slate-500">
+                Logo
+              </span>
+            )}
+          </div>
+          <div>
+            <h1 className="text-2xl font-black uppercase tracking-tight text-orange-500 sm:text-3xl">
+              {restaurante?.nombre || "Cargando..."}
+            </h1>
+            <p className="mt-1 text-xs font-bold uppercase tracking-widest text-slate-400">
+              Dashboard de Caja
+            </p>
+          </div>
         </div>
         {/* ... Resto del Header y Grid ... */}
         <div className="flex flex-col items-end gap-3">
@@ -133,6 +205,18 @@ export default function CajaDashboard({
             <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
             Sistema Online
           </div>
+          <button
+            onClick={handleIrACierre}
+            disabled={validandoCierre}
+            className={`text-[10px] font-black border px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter ${
+              validandoCierre
+                ? "cursor-not-allowed text-orange-200/60 border-orange-500/20"
+                : "text-orange-300 hover:text-orange-200 border-orange-500/30 hover:border-orange-400/50"
+            }`}
+          >
+            {validandoCierre ? "Validando..." : "Arqueo / Cierre"}
+          </button>
+
           <button
             onClick={handleLogout}
             className="text-[10px] font-black text-slate-500 hover:text-red-400 border border-slate-700 hover:border-red-400/30 px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter"
@@ -178,6 +262,7 @@ export default function CajaDashboard({
               onClick={
                 () => {
                   setImpresionConfirmada(false)
+                  setFormaPago("")
                   setFacturaParaCobrar(fac)
                 }   
               }
@@ -200,6 +285,7 @@ export default function CajaDashboard({
         onClick={() => {
         setFacturaParaCobrar(null)
         setImpresionConfirmada(false)
+        setFormaPago("")
       }}
 
         className="absolute -top-3 -right-3 bg-red-500 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 font-bold z-[60]"
@@ -215,19 +301,37 @@ export default function CajaDashboard({
         </h2>
       </div>
 
-      <div className="mt-8 flex flex-col gap-2">
+      <div className="mt-6 flex flex-col gap-2">
+        <label className="text-[11px] font-bold uppercase text-slate-700">
+          Forma de pago
+        </label>
+        <select
+        value={formaPago}
+        onChange={(e) => setFormaPago(e.target.value as FormaPago | "")}
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+      >
+        <option value="">Seleccionar</option>
+        <option value="efectivo">Efectivo</option>
+        <option value="tarjeta">Tarjeta</option>
+        <option value="transferencia">Transferencia bancaria</option>
+      </select>
         <button
           onClick={handleImprimirYHabilitarCierre}
-          className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg"
+          disabled={!formaPago}
+          className={`w-full font-bold py-3 rounded-lg text-white ${
+            !formaPago
+              ? "bg-slate-700/60 cursor-not-allowed"
+              : "bg-slate-900 hover:bg-slate-800"
+          }`}
         >
           🖨️ Imprimir
         </button>
 
         <button
           onClick={handleConfirmarPago}
-          disabled={procesando || !impresionConfirmada}
+          disabled={procesando || !impresionConfirmada || !formaPago}
           className={`w-full font-bold py-3 rounded-lg text-white ${
-            procesando || !impresionConfirmada
+            procesando || !impresionConfirmada || !formaPago
               ? 'bg-emerald-600/50 cursor-not-allowed'
               : 'bg-emerald-600 hover:bg-emerald-700'
           }`}
@@ -241,6 +345,3 @@ export default function CajaDashboard({
 </main>
 );
 }
-
-
-

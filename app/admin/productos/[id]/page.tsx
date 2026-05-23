@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import FormularioProducto from '../nuevo/FormularioProducto' // Reutilizaremos tu componente
+import FormularioProducto from '../nuevo/FormularioProducto' 
 
 export default async function EditarProductoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

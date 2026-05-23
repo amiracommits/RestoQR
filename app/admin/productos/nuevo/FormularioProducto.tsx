@@ -78,7 +78,7 @@ export default function FormularioProducto({
       {/* 5. Acción dinámica según si existe productoInicial */}
       <form
         action={productoInicial ? updateProduct : createProduct}
-        className="grid grid-cols-1 gap-6 lg:grid-cols-2"
+        className="grid grid-cols-1 gap-6 lg:grid-cols-3"
         encType="multipart/form-data"
       >
         {/* 6. Campo oculto necesario para saber QUÉ producto actualizar */}
@@ -195,6 +195,19 @@ export default function FormularioProducto({
                 <div>
                   <span className="block text-sm font-medium text-neutral-200">¿Es plato fuerte/compuesto?</span>
                   <span className="text-xs text-neutral-500">Permite elegir acompañamientos.</span>
+                </div>
+              </label>
+              {/* Toggle: Gravamen Especial */}
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06]">
+                <input
+                  type="checkbox"
+                  name="es_gravamen_especial"
+                  className="h-5 w-5 accent-orange-500"
+                  defaultChecked={productoInicial?.es_gravamen_especial || false}
+                />
+                <div>
+                  <span className="block text-sm font-medium text-neutral-200">¿Gravamen especial?</span>
+                  <span className="text-xs text-neutral-500">Aplica impuesto especial (ej. alcohol).</span>
                 </div>
               </label>
             </div>

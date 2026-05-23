@@ -31,8 +31,8 @@ export default async function ProductosPage() {
       {/* RESTAURADO: Encabezado con Botón de Nuevo Producto */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-10">
         <div>
-          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Gestionar Menú</h1>
-          
+          <h1 className="text-4xl font-extrabold text-orange-400 tracking-tight">Gestionar Menú</h1>
+
           <p className="text-sm text-neutral-500 mt-1">Control total de tus platillos y categorías.</p>
         </div>
         

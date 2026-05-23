@@ -8,6 +8,8 @@ export async function createProduct(formData: FormData) {
   const es_complemento = formData.get('es_complemento') === 'on';
   const es_plato_compuesto = formData.get('es_plato_compuesto') === 'on';
   const cant_complementos = parseInt(formData.get('cant_complementos') as string) || 0;
+  const es_gravamen_especial = formData.get('es_gravamen_especial') === 'on';
+
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error("No autorizado")
@@ -55,8 +57,10 @@ export async function createProduct(formData: FormData) {
     // nuevos campos de menu inteligente
     es_complemento,
     es_plato_compuesto,
-    cant_complementos
+    cant_complementos,
+    es_gravamen_especial
   }
+
 
   const { error } = await supabase.from('productos').insert([rawFormData])
   if (error) throw new Error(error.message)
@@ -111,10 +115,11 @@ export async function deleteProduct(productId: string) {
 export async function updateProduct(formData: FormData) {
   const supabase = await createClient()
   const productId = formData.get('producto_id') as string
-// Extraemos los nuevos campos
   const es_complemento = formData.get('es_complemento') === 'on';
   const es_plato_compuesto = formData.get('es_plato_compuesto') === 'on';
   const cant_complementos = parseInt(formData.get('cant_complementos') as string) || 0;
+  const es_gravamen_especial = formData.get('es_gravamen_especial') === 'on';
+
 
   // 1. Obtener datos actuales del producto (para saber si hay que borrar una imagen vieja)
   const { data: productoViejo } = await supabase
@@ -157,10 +162,10 @@ export async function updateProduct(formData: FormData) {
       categoria_id: formData.get('categoria_id'),
       unsplash_id: unsplash_id,
       imagen_url: imagen_url,
-      // AGREGAMOS LOS NUEVOS CAMPOS:
       es_complemento,
       es_plato_compuesto,
-      cant_complementos
+      cant_complementos,
+      es_gravamen_especial
     })
     .eq('id', productId)
 
