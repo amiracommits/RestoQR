@@ -64,8 +64,8 @@ export default function FormularioProducto({
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
-      <header className="mb-8">
+    <div className="mx-auto w-full max-w-6xl">
+      <header className="mb-6 sm:mb-8">
         <Link href="/admin/productos" className="text-sm text-neutral-500 transition-colors hover:text-neutral-200">
           ← Volver al listado
         </Link>
@@ -78,13 +78,13 @@ export default function FormularioProducto({
       {/* 5. Acción dinámica según si existe productoInicial */}
       <form
         action={productoInicial ? updateProduct : createProduct}
-        className="grid grid-cols-1 gap-6 lg:grid-cols-3"
+        className="grid grid-cols-1 gap-6 xl:gap-8 lg:grid-cols-2"
         encType="multipart/form-data"
       >
         {/* 6. Campo oculto necesario para saber QUÉ producto actualizar */}
         {productoInicial && <input type="hidden" name="producto_id" value={productoInicial.id} />}
 
-        <div className="space-y-5 rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-5 sm:p-6">
+        <div className="h-full space-y-5 rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-5 sm:p-6">
           <input type="hidden" name="unsplash_id" value={selectedId} />
 
           <div>
@@ -164,48 +164,48 @@ export default function FormularioProducto({
             */}
 
           {/* --- SECCIÓN DE LÓGICA DE PLATOS (NUEVO) --- */}
-          <div className="mb-8 space-y-6 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+          <div className="space-y-6 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
             <h3 className="flex items-center gap-2 text-sm font-medium text-neutral-200">
               <span className="text-orange-400">⚙️</span> Configuración de Producto
             </h3>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {/* Toggle: Es Complemento */}
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06]">
+              <label className="flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06]">
                 <input
                   type="checkbox"
                   name="es_complemento"
-                  className="h-5 w-5 accent-orange-500"
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-orange-500"
                   defaultChecked={productoInicial?.es_complemento || false}
                 />
-                <div>
+                <div className="min-w-0">
                   <span className="block text-sm font-medium text-neutral-200">¿Es un complemento?</span>
                   <span className="text-xs text-neutral-500">Aparecerá en la lista de guarniciones.</span>
                 </div>
               </label>
 
               {/* Toggle: Es Plato Compuesto */}
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06]">
+              <label className="flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06]">
                 <input
                   type="checkbox"
                   name="es_plato_compuesto"
-                  className="h-5 w-5 accent-orange-500"
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-orange-500"
                   defaultChecked={productoInicial?.es_plato_compuesto || false}
                 />
-                <div>
+                <div className="min-w-0">
                   <span className="block text-sm font-medium text-neutral-200">¿Es plato fuerte/compuesto?</span>
                   <span className="text-xs text-neutral-500">Permite elegir acompañamientos.</span>
                 </div>
               </label>
               {/* Toggle: Gravamen Especial */}
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06]">
+              <label className="flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06] xl:col-span-2">
                 <input
                   type="checkbox"
                   name="es_gravamen_especial"
-                  className="h-5 w-5 accent-orange-500"
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-orange-500"
                   defaultChecked={productoInicial?.es_gravamen_especial || false}
                 />
-                <div>
+                <div className="min-w-0">
                   <span className="block text-sm font-medium text-neutral-200">¿Gravamen especial?</span>
                   <span className="text-xs text-neutral-500">Aplica impuesto especial (ej. alcohol).</span>
                 </div>
@@ -232,15 +232,20 @@ export default function FormularioProducto({
             </div>
           </div>
 
-          <button type="submit" className="w-full rounded-xl bg-[#E85D26] py-3 text-sm font-medium text-white transition-colors hover:bg-orange-700">
+          <button type="submit" className="mt-2 w-full rounded-xl bg-[#E85D26] py-3.5 text-sm font-semibold text-white transition-colors hover:bg-orange-700">
             {productoInicial ? 'Actualizar Producto' : 'Guardar Producto'}
           </button>
         </div>
 
-        <div className="flex flex-col rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-5 sm:p-6">
-          <label className="mb-4 block text-sm font-medium text-neutral-300">Vista Previa / Banco de Fotos</label>
+        <div className="flex h-full flex-col rounded-2xl border border-white/[0.07] bg-[#1a1a1a] p-5 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <label className="block text-sm font-medium text-neutral-300">Vista previa / Banco de fotos</label>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">
+              {images.length > 0 ? `${images.length} sugerencias` : 'Sin resultados'}
+            </span>
+          </div>
 
-          <div className="relative mb-6 aspect-square overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.03]">
+          <div className="relative mb-5 aspect-[4/3] overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.03] lg:aspect-square">
             {/* 7. Lógica de preview priorizada */}
             {previewLocal ? (
               <Image src={previewLocal} alt="Preview local" fill className="object-cover" />
@@ -257,21 +262,21 @@ export default function FormularioProducto({
             )}
           </div>
 
-          <div className="custom-scrollbar flex-1 overflow-y-auto pr-2">
+          <div className="custom-scrollbar flex-1 overflow-y-auto pr-1">
             {loadingImages ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-neutral-500">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent"></div>
                 <p>Buscando en Unsplash...</p>
               </div>
             ) : images.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                 {images.map((img: any) => {
                   const idLargo = img.urls.raw.split('photo-')[1]?.split('?')[0]
                   return (
                     <div
                       key={img.id}
                       onClick={() => handleUnsplashSelect(img)}
-                      className={`relative aspect-square cursor-pointer overflow-hidden rounded-xl border-2 transition-all ${selectedId === idLargo ? 'scale-95 border-[#E85D26]' : 'border-white/[0.07] opacity-70 hover:opacity-100'}`}
+                      className={`relative aspect-square cursor-pointer overflow-hidden rounded-xl border-2 transition-all ${selectedId === idLargo ? 'scale-[0.98] border-[#E85D26] shadow-lg shadow-orange-900/20' : 'border-white/[0.07] opacity-80 hover:opacity-100'}`}
                     >
                       <Image src={img.urls.small} alt="Unsplash Option" fill className="object-cover" />
                     </div>
