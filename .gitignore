@@ -42,3 +42,6 @@ next-env.d.ts
 
 #context
 context.md
+
+#notes
+notesco.tsx

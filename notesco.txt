@@ -63,6 +63,21 @@ c0c2fd6c-0e81-409d-afad-a46f495211af,e941985a-617e-4578-be72-58a2370151e8,9,2,20
 
 
 
+PARA QRS de AFRODITA CAFE
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=33ad825a-ad48-46b2-9c0a-03292b64ac35
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=256e4283-cbee-483d-933c-8e8bc47da6f6
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=d9594657-6d04-4372-bfeb-a8cfcb8fb1e1
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=b2f9a676-960d-471f-a814-27d3608f4183
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=9d025957-40fe-41ac-8a87-ab898fda0609
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=95da1f0e-fd31-486d-97ab-87e8bdca5fd4
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=b3d18217-f595-47fc-8ae2-9128e4d8314c
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=efb28ea3-f038-4c13-a94f-39b1fde46524
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=daea7d73-3225-4a31-964f-a7dfc042f191
+https://arpcomandix.vercel.app/afrodita-cafe?mesa=fa5b851c-e813-478f-9502-b178e7bed5fa
+
+
+
+
 
 URL de afrodita
 http://192.168.1.8:3005/afrodita-cafe?mesa=88d5e4e3-84f0-4c27-8922-8b4564fe7c86
@@ -154,22 +169,25 @@ que aparezca pedido numero tal en la factura
 
 
 
-issue: numero de factura esta quedando null
+GIT SHIT
+cd /Users/arlexpineda/restaurante-qr
+
+git status
+git add 
+git commit -m "fix(ui): mejora layout y balance visual en formulario de productos"
+git push origin main
 
 
+cd /Users/arlexpineda/restaurante-qr
 
-implementar forma de pago en la tabla facturas.
+git status
+git add app/login/page.tsx app/admin/components/Sidebar.tsx
+git commit -m "feat(ui): integrar logo Commandix en login y sidebar admin"
+git push origin main
 
-Tabla global para parametros de impuesto 
-Implementar calculo de impuesto ISV al generar la factura.
-reflejar calculo de impuesto ISV normal y gravamen especial en la factura.
+cd /Users/arlexpineda/restaurante-qr
 
-implementar opcion de cierre de caja 
-it must: mostrar una pantalla previa de resultados con el detalle de las facturas desde la numero uno hasta la ultima generada 
-por campo numero_pedido_amigable de la tabla factura. 
-debe sumarizar por tipo de venta y sumarizar el total general. 
-Se debe ejecutar un RCP a supabase para reiniciar contadores de pedidos a cero. 
-y dejar registro en una tabla especial para arqueos.
-
-
-
+git status
+git add -A
+git commit -m "chore: update project changes"
+git push origin main
