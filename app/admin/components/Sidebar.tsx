@@ -35,12 +35,12 @@ export default function Sidebar() {
     <>
       <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#0f0f0f]/90 backdrop-blur-xl md:hidden">
         <div className="flex h-16 items-center justify-between px-4">
-          <Link href="/admin/dashboard" className="leading-none">
-            <p className="text-base font-semibold tracking-tight text-neutral-100">
-              ZNT <span className="text-[#E85D26]">Admin</span>
-            </p>
-            <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-neutral-600">
-              Restaurante
+          <Link href="/admin/dashboard" className="flex items-center gap-2.5 leading-none">
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border border-white/[0.08] bg-[#1a1a1a]">
+              <img src="/img/cxlogo.png" alt="CX Logo" className="h-full w-full object-contain p-1" />
+            </div>
+            <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">
+              Panel administrativo
             </p>
           </Link>
 
@@ -58,12 +58,17 @@ export default function Sidebar() {
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 border-r border-white/[0.07] bg-[#111111] md:flex md:flex-col">
         <div className="px-6 pb-6 pt-8">
           <Link href="/admin/dashboard" className="block">
-            <h2 className="text-2xl font-semibold tracking-tight text-neutral-100">
-              ZNT <span className="text-[#E85D26]">Admin</span>
-            </h2>
-            <p className="mt-2 text-xs font-medium uppercase tracking-widest text-neutral-600">
-              Panel restaurante
-            </p>
+            <div className="flex h-14 w-44 items-center justify-between overflow-hidden rounded-xl border border-white/[0.08] bg-[#1a1a1a] px-3">
+              <img src="/img/cxlogo.png" alt="CX Logo" className="h-10 w-auto object-contain" />
+              <div className="pr-1 text-right leading-tight">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-300">
+                  Panel
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-500">
+                  Administrativo
+                </p>
+              </div>
+            </div>
           </Link>
         </div>
 

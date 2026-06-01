@@ -35,14 +35,15 @@ export default function LoginPage() {
 
         {/* Logo & Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-orange-600 rounded-2xl mb-5">
-            <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C8.5 2 6 4.5 6 7c0 1.5.6 2.8 1.6 3.8L6 20h12l-1.6-9.2C17.4 9.8 18 8.5 18 7c0-2.5-2.5-5-6-5z" fill="currentColor" opacity="0.9"/>
-              <path d="M9 7h6M9 7c0 1.7 1.3 3 3 3s3-1.3 3-3" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a1a1a]">
+            <img
+              src="/img/cxlogo.png"
+              alt="CX Logo"
+              className="h-full w-full object-contain p-1.5"
+            />
           </div>
-          <h1 className="text-2xl font-medium text-neutral-100 tracking-tight">ZNT Restaurant</h1>
-          <p className="text-sm text-neutral-500 mt-1">Panel de administración</p>
+          <h1 className="text-2xl font-medium text-neutral-100 tracking-tight">Commandix Restaurant ERP</h1>
+          <p className="text-sm text-neutral-500 mt-1">Inicio de Sesion</p>
         </div>
 
         {/* Card */}
@@ -119,9 +120,12 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-neutral-700 mt-6">
-          ZNT · Sistema de gestión de restaurante
-        </p>
+        <footer className="mt-6 space-y-1 text-center">
+          <p className="text-xs font-medium text-neutral-500">Maximus Software Solutions</p>
+          <p className="text-xs text-neutral-700">
+            Copyright (c) {new Date().getFullYear()} Maximus Software Solutions. All rights reserved.
+          </p>
+        </footer>
 
       </div>
     </div>
