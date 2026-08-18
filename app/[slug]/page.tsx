@@ -41,7 +41,7 @@ export default async function PublicMenuPage({ params,searchParams}: {
   // 3. Obtener Productos y Categorías (Aislamiento Multi-tenant por restaurante_id)
   const { data: productos } = await supabase
     .from('productos')
-    .select('*, categorias(id, nombre)')
+    .select('*, categorias(id, nombre, orden)')
     .eq('restaurante_id', restaurante.id)
     .eq('disponible', true) // Solo los activos
     .order('nombre');
@@ -57,9 +57,13 @@ export default async function PublicMenuPage({ params,searchParams}: {
     if (prod.categorias) {
       const catId = prod.categorias.id
       const catNombre = prod.categorias.nombre
+      const catOrden = prod.categorias.orden
       
       if (!categoriasMap.has(catId)) {
-        categoriasMap.set(catId, { nombre: catNombre, items: [] })
+        categoriasMap.set(catId, { 
+          nombre: catNombre, 
+          orden: catOrden, 
+          items: [] })
       }
       categoriasMap.get(catId).items.push(prod)
     }
@@ -70,8 +74,8 @@ export default async function PublicMenuPage({ params,searchParams}: {
     id,
     ...data
   })
-
 )
+.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)) 
 
   
 
