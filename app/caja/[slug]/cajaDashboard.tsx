@@ -5,6 +5,8 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { finalizarPedidoCompleto } from "./actions";
 import { CajaDashboardProps, Factura, DetalleFactura } from "./types"; // 👈 Tipos externos
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 type FormaPago = "efectivo" | "tarjeta" | "transferencia";
 
@@ -110,6 +112,90 @@ export default function CajaDashboard({
     window.open(url, "_blank", "width=400,height=600");
   };
 
+  const handleVerCuentaPDF = (factura: Factura) => {
+    const doc = new jsPDF({
+      unit: "mm",
+      format: [80, 200],
+    });
+    const fecha = format(new Date(factura.created_at), "dd/MM/yyyy HH:mm");
+    const mesa = factura.mesas?.numero_mesa ?? "S/N";
+    const pedido = factura.numero_pedido_amigable ?? "S/N";
+
+    doc.setTextColor(0, 0, 0);
+    doc.setDrawColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text(restaurante.nombre.toUpperCase(), 40, 10, { align: "center" });
+
+    doc.setFontSize(9);
+    doc.text("RESUMEN DE CUENTA", 40, 16, { align: "center" });
+
+    doc.line(5, 20, 75, 20);
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Mesa: ${mesa}`, 5, 26);
+    doc.text(`Pedido: #${pedido}`, 5, 31);
+    doc.text(`Fecha: ${fecha}`, 5, 36);
+
+    const filas = factura.detalle_facturas.map((det) => [
+      `${det.cantidad}`,
+      det.productos.nombre,
+      det.precio_unitario.toFixed(2),
+      det.subtotal.toFixed(2),
+    ]);
+
+    autoTable(doc, {
+      head: [["Cant.", "Producto", "P/U", "Subt."]],
+      body: filas,
+      startY: 42,
+      margin: { left: 5, right: 5 },
+      tableWidth: 70,
+      theme: "plain",
+      headStyles: {
+        textColor: [0, 0, 0],
+        fillColor: [255, 255, 255],
+        fontStyle: "bold",
+        lineColor: [0, 0, 0],
+        lineWidth: 0.1,
+      },
+      bodyStyles: {
+        textColor: [0, 0, 0],
+      },
+      styles: {
+        fontSize: 7,
+        cellPadding: 1,
+        lineColor: [0, 0, 0],
+      },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 10 },
+        1: { cellWidth: 34 },
+        2: { halign: "right", cellWidth: 13 },
+        3: { halign: "right", cellWidth: 13 },
+      },
+    });
+
+    const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } })
+      .lastAutoTable?.finalY ?? 70;
+
+    doc.line(5, finalY + 4, 75, finalY + 4);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL", 5, finalY + 11);
+    doc.text(`L. ${factura.total.toFixed(2)}`, 75, finalY + 11, {
+      align: "right",
+    });
+
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text("Resumen de consumo. No es factura fiscal.", 40, finalY + 22, {
+      align: "center",
+    });
+
+    const pdfUrl = doc.output("bloburl");
+    window.open(pdfUrl, "_blank");
+  };
+
 
   const handleImprimirYHabilitarCierre = async () => {
   if (!facturaParaCobrar) return
@@ -156,8 +242,9 @@ const handleIrACierre = async () => {
 
     // OK -> ir a pantalla de cierre
     router.push(`/caja/${restaurante.slug}/cierre`);
-  } catch (error: any) {
-    console.error("Error validando cierre de caja:", error?.message || error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : error;
+    console.error("Error validando cierre de caja:", message);
     alert("No se pudo validar el cierre de caja. Inténtalo nuevamente.");
   } finally {
     setValidandoCierre(false);
@@ -269,6 +356,12 @@ const handleIrACierre = async () => {
               className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-3 rounded-xl transition-all uppercase tracking-widest text-xs"
             >
               Generar Factura
+            </button>
+            <button
+              onClick={() => handleVerCuentaPDF(fac)}
+              className="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl transition-all uppercase tracking-widest text-xs"
+            >
+              Ver Cuenta
             </button>
           </div>
         ))}

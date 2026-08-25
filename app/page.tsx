@@ -76,6 +76,17 @@ export default async function IndexPage() {
     return redirect(`/caja/${userSlug}`);
   }
 
+  /**
+   * 5. MESEROS
+   */
+  if (rolUser === 'meseros') {
+    if (!perfil.restaurante_id) {
+      console.error("⚠️ Usuario mesero sin restaurante asignado");
+      return redirect('/unauthorized');
+    }
+    return redirect('/din');
+  }
+
   // Si el rol existe pero no está mapeado
   console.error(`🚫 Acceso denegado para el rol: ${rolUser}`);
   redirect('/unauthorized');
