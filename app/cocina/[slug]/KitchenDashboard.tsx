@@ -47,6 +47,9 @@ export default function KitchenDashboard({
   const router = useRouter();
   const supabase = createClient();
   const [mounted, setMounted] = useState(false);
+  const [mensajeCajaCerrada, setMensajeCajaCerrada] = useState<string | null>(
+    null,
+  );
 
   // Sincronizar props con estado local
   useEffect(() => {
@@ -120,6 +123,21 @@ export default function KitchenDashboard({
     router.replace("/login");
   };
 
+  const cajaEstaAbierta = async () => {
+    const { data, error } = await supabase
+      .from("configuracion_global")
+      .select("*")
+      .eq("clave", "caja")
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const config = data as { activo?: boolean | string | null; valor?: boolean | string | null } | null;
+    const estadoCaja = config?.activo ?? config?.valor;
+
+    return estadoCaja === true || String(estadoCaja).toLowerCase() === "true";
+  };
+
   /*DEPRECADO <ESTA FUNCION YA NO SE LLAMA DESDE EL BOTON DE COMPLETAR PEDIDO
   se sustituyó por "completarPedido"
   */
@@ -159,6 +177,21 @@ export default function KitchenDashboard({
   };
 
   const completarPedido = async (id: string) => {
+    let cajaAbierta = false;
+
+    try {
+      cajaAbierta = await cajaEstaAbierta();
+    } catch (error) {
+      console.error("Error validando configuracion de caja:", error);
+    }
+
+    if (!cajaAbierta) {
+      setMensajeCajaCerrada(
+        "No se puede facturar por que la caja no se ha abierto todavia",
+      );
+      return;
+    }
+
     const pedidosPrevios = [...pedidos];
 
     // Update optimista en UI
@@ -297,6 +330,26 @@ export default function KitchenDashboard({
           );
         })}
       </div>
+
+      {mensajeCajaCerrada && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-orange-500/20 bg-slate-900 p-6 text-center shadow-2xl">
+            <h2 className="text-lg font-black uppercase tracking-wide text-orange-300">
+              Caja cerrada
+            </h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-200">
+              {mensajeCajaCerrada}
+            </p>
+            <button
+              type="button"
+              onClick={() => setMensajeCajaCerrada(null)}
+              className="mt-5 h-11 w-full rounded-xl bg-orange-600 px-4 text-sm font-black uppercase tracking-widest text-white transition-colors hover:bg-orange-500"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

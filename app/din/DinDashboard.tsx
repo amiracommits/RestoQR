@@ -42,6 +42,12 @@ export interface RestauranteDin {
   logo_url?: string | null;
 }
 
+export interface MesaDin {
+  id: string;
+  numero_mesa: string;
+  estado?: string | null;
+}
+
 export interface ProductoMenuDin {
   id: string;
   nombre: string;
@@ -58,7 +64,9 @@ export interface CategoriaMenuDin {
 
 interface DinDashboardProps {
   restaurante: RestauranteDin;
+  meseroNombre: string;
   facturas: FacturaActiva[];
+  mesas: MesaDin[];
   menu: CategoriaMenuDin[];
 }
 
@@ -68,11 +76,7 @@ interface ProductoSeleccionado {
 }
 
 const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("es-HN", {
-    style: "currency",
-    currency: "HNL",
-    minimumFractionDigits: 2,
-  }).format(value);
+  `L. ${Number(value ?? 0).toFixed(2)}`;
 
 const formatTime = (value: string) =>
   new Intl.DateTimeFormat("es-HN", {
@@ -82,7 +86,9 @@ const formatTime = (value: string) =>
 
 export default function DinDashboard({
   restaurante,
+  meseroNombre,
   facturas,
+  mesas,
   menu,
 }: DinDashboardProps) {
   const router = useRouter();
@@ -91,17 +97,30 @@ export default function DinDashboard({
     useState<FacturaActiva | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [resumenAbierto, setResumenAbierto] = useState(false);
+  const [nuevoPedidoAbierto, setNuevoPedidoAbierto] = useState(false);
+  const [resumenNuevoPedidoAbierto, setResumenNuevoPedidoAbierto] =
+    useState(false);
+  const [mesaNuevoPedidoId, setMesaNuevoPedidoId] = useState("");
   const [categoriaSeleccionadaId, setCategoriaSeleccionadaId] = useState(
     menu[0]?.id ?? "",
   );
+  const [categoriaNuevoPedidoId, setCategoriaNuevoPedidoId] = useState(
+    menu[0]?.id ?? "",
+  );
   const [seleccionados, setSeleccionados] = useState<
+    Record<string, ProductoSeleccionado>
+  >({});
+  const [seleccionadosNuevoPedido, setSeleccionadosNuevoPedido] = useState<
     Record<string, ProductoSeleccionado>
   >({});
   const [facturasExpandidas, setFacturasExpandidas] = useState<
     Record<string, boolean>
   >({});
   const [guardando, setGuardando] = useState(false);
+  const [guardandoNuevoPedido, setGuardandoNuevoPedido] = useState(false);
   const [errorModal, setErrorModal] = useState<string | null>(null);
+  const [errorNuevoPedido, setErrorNuevoPedido] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const totalActivo = useMemo(
     () => facturas.reduce((acc, factura) => acc + Number(factura.total ?? 0), 0),
@@ -120,6 +139,18 @@ export default function DinDashboard({
     [seleccionados],
   );
 
+  const categoriaNuevoPedido = useMemo(
+    () =>
+      menu.find((categoria) => categoria.id === categoriaNuevoPedidoId) ??
+      menu[0],
+    [categoriaNuevoPedidoId, menu],
+  );
+
+  const productosNuevoPedido = useMemo(
+    () => Object.values(seleccionadosNuevoPedido),
+    [seleccionadosNuevoPedido],
+  );
+
   const totalAAgregar = useMemo(
     () =>
       productosSeleccionados.reduce(
@@ -133,6 +164,25 @@ export default function DinDashboard({
     () =>
       productosSeleccionados.reduce((acc, item) => acc + item.cantidad, 0),
     [productosSeleccionados],
+  );
+
+  const totalNuevoPedido = useMemo(
+    () =>
+      productosNuevoPedido.reduce(
+        (acc, item) => acc + Number(item.producto.precio ?? 0) * item.cantidad,
+        0,
+      ),
+    [productosNuevoPedido],
+  );
+
+  const cantidadNuevoPedido = useMemo(
+    () => productosNuevoPedido.reduce((acc, item) => acc + item.cantidad, 0),
+    [productosNuevoPedido],
+  );
+
+  const mesaNuevoPedido = useMemo(
+    () => mesas.find((mesa) => mesa.id === mesaNuevoPedidoId) ?? null,
+    [mesaNuevoPedidoId, mesas],
   );
 
   const totalFacturaProcesada = useMemo(
@@ -151,6 +201,33 @@ export default function DinDashboard({
     }
   };
 
+  const abrirNuevoPedido = () => {
+    setSeleccionadosNuevoPedido({});
+    setMesaNuevoPedidoId("");
+    setResumenNuevoPedidoAbierto(false);
+    setErrorNuevoPedido(null);
+    setSuccessMessage(null);
+    setNuevoPedidoAbierto(true);
+    if (!categoriaNuevoPedidoId && menu[0]?.id) {
+      setCategoriaNuevoPedidoId(menu[0].id);
+    }
+  };
+
+  const cajaEstaAbierta = async () => {
+    const { data, error } = await supabase
+      .from("configuracion_global")
+      .select("*")
+      .eq("clave", "caja")
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const config = data as { activo?: boolean | string | null; valor?: boolean | string | null } | null;
+    const estadoCaja = config?.valor ?? config?.activo;
+
+    return estadoCaja === true || String(estadoCaja).toLowerCase() === "true";
+  };
+
   const toggleFacturaExpandida = (facturaId: string) => {
     setFacturasExpandidas((current) => ({
       ...current,
@@ -167,6 +244,25 @@ export default function DinDashboard({
 
   const cambiarCantidad = (producto: ProductoMenuDin, delta: number) => {
     setSeleccionados((current) => {
+      const actual = current[producto.id]?.cantidad ?? 0;
+      const siguiente = Math.max(0, actual + delta);
+      const copia = { ...current };
+
+      if (siguiente === 0) {
+        delete copia[producto.id];
+      } else {
+        copia[producto.id] = { producto, cantidad: siguiente };
+      }
+
+      return copia;
+    });
+  };
+
+  const cambiarCantidadNuevoPedido = (
+    producto: ProductoMenuDin,
+    delta: number,
+  ) => {
+    setSeleccionadosNuevoPedido((current) => {
       const actual = current[producto.id]?.cantidad ?? 0;
       const siguiente = Math.max(0, actual + delta);
       const copia = { ...current };
@@ -214,6 +310,50 @@ export default function DinDashboard({
     }
   };
 
+  const crearNuevoPedido = async () => {
+    if (!mesaNuevoPedidoId || productosNuevoPedido.length === 0) return;
+
+    setGuardandoNuevoPedido(true);
+    setErrorNuevoPedido(null);
+    setSuccessMessage(null);
+
+    try {
+      const cajaAbierta = await cajaEstaAbierta();
+
+      if (!cajaAbierta) {
+        setErrorNuevoPedido(
+          "No es posible facturar por que la caja no se ha abierto todavia",
+        );
+        return;
+      }
+
+      const { error } = await supabase.rpc("agregar_pedido_mesero", {
+        p_mesa_id: mesaNuevoPedidoId,
+        p_items: productosNuevoPedido.map((item) => ({
+          producto_id: item.producto.id,
+          cantidad: item.cantidad,
+        })),
+      });
+
+      if (error) throw error;
+
+      setSeleccionadosNuevoPedido({});
+      setMesaNuevoPedidoId("");
+      setResumenNuevoPedidoAbierto(false);
+      setNuevoPedidoAbierto(false);
+      setSuccessMessage("Pedido agregado.");
+      router.refresh();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo agregar el pedido.";
+      setErrorNuevoPedido(message);
+    } finally {
+      setGuardandoNuevoPedido(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#0f0f0f] px-4 pb-8 pt-5 text-neutral-100">
       <header className="sticky top-0 z-10 -mx-4 border-b border-white/[0.07] bg-[#0f0f0f]/95 px-4 pb-4 backdrop-blur">
@@ -237,6 +377,9 @@ export default function DinDashboard({
                 {restaurante.nombre}
               </p>
               <h1 className="text-xl font-black tracking-tight">Mesero</h1>
+              <p className="mt-0.5 truncate text-xs font-medium text-neutral-500">
+                Has iniciado sesion como {meseroNombre}
+              </p>
             </div>
           </div>
 
@@ -264,7 +407,22 @@ export default function DinDashboard({
             <p className="mt-1 text-lg font-black">{formatCurrency(totalActivo)}</p>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={abrirNuevoPedido}
+          className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#E85D26] px-4 text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700"
+        >
+          <PlusIcon className="h-5 w-5" />
+          Nuevo pedido
+        </button>
       </header>
+
+      {successMessage && (
+        <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-200">
+          {successMessage}
+        </div>
+      )}
 
       <section className="mt-5 space-y-4">
         {facturas.length === 0 ? (
@@ -628,6 +786,284 @@ export default function DinDashboard({
                 className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-[#E85D26] px-4 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
               >
                 {guardando ? "PROCESANDO..." : "CONFIRMAR"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {nuevoPedidoAbierto && (
+        <div className="fixed inset-0 z-30 bg-black/70 p-0 backdrop-blur-sm sm:px-3 sm:py-4">
+          <div className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden bg-[#141414] shadow-2xl shadow-black sm:rounded-2xl sm:border sm:border-white/[0.08]">
+            <div className="shrink-0 border-b border-white/[0.08] px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-orange-400">
+                    Mesero
+                  </p>
+                  <h2 className="truncate text-lg font-black">Nuevo pedido</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResumenNuevoPedidoAbierto(false);
+                    setNuevoPedidoAbierto(false);
+                  }}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-neutral-300"
+                  aria-label="Cerrar nuevo pedido"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mt-3">
+                <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-neutral-500">
+                  Mesa
+                </label>
+                <select
+                  value={mesaNuevoPedidoId}
+                  onChange={(event) => setMesaNuevoPedidoId(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#0f0f0f] px-3 text-sm font-bold text-neutral-100 outline-none"
+                >
+                  <option value="">Seleccionar mesa</option>
+                  {mesas.map((mesa) => (
+                    <option key={mesa.id} value={mesa.id}>
+                      Mesa {mesa.numero_mesa}
+                      {mesa.estado ? ` - ${mesa.estado}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)_auto]">
+              <aside className="min-w-0 border-b border-white/[0.08] p-3 md:row-span-2 md:border-b-0 md:border-r">
+                <div className="flex max-w-full gap-2 overflow-x-auto md:block md:space-y-2 md:overflow-visible">
+                  {menu.map((categoria) => (
+                    <button
+                      key={categoria.id}
+                      type="button"
+                      onClick={() => setCategoriaNuevoPedidoId(categoria.id)}
+                      className={`h-11 shrink-0 rounded-xl px-4 text-left text-sm font-bold transition-colors md:w-full ${
+                        categoriaNuevoPedido?.id === categoria.id
+                          ? "bg-white text-neutral-950"
+                          : "border border-white/[0.08] text-neutral-300"
+                      }`}
+                    >
+                      {categoria.nombre}
+                    </button>
+                  ))}
+                </div>
+              </aside>
+
+              <section className="min-h-0 min-w-0 overflow-y-auto p-3 md:p-4">
+                {categoriaNuevoPedido ? (
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {categoriaNuevoPedido.items.map((producto) => {
+                      const cantidad =
+                        seleccionadosNuevoPedido[producto.id]?.cantidad ?? 0;
+
+                      return (
+                        <article
+                          key={producto.id}
+                          onClick={() => cambiarCantidadNuevoPedido(producto, 1)}
+                          className={`rounded-xl border p-3 transition-colors active:scale-[0.99] ${
+                            cantidad > 0
+                              ? "border-orange-400/50 bg-orange-500/10"
+                              : "border-white/[0.08] bg-white/[0.03]"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <h3 className="line-clamp-2 text-sm font-black">
+                              {producto.nombre}
+                            </h3>
+                            {producto.descripcion && (
+                              <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">
+                                {producto.descripcion}
+                              </p>
+                            )}
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                              <p className="text-base font-black text-orange-400">
+                                {formatCurrency(Number(producto.precio ?? 0))}
+                              </p>
+                              <div className="grid grid-cols-[36px_34px_36px] items-center rounded-xl border border-white/[0.08] bg-black/20">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    cambiarCantidadNuevoPedido(producto, -1);
+                                  }}
+                                  className="flex h-9 items-center justify-center text-neutral-300 disabled:text-neutral-700"
+                                  disabled={cantidad === 0}
+                                  aria-label={`Restar ${producto.nombre}`}
+                                >
+                                  <MinusIcon className="h-4 w-4" />
+                                </button>
+                                <span className="text-center text-sm font-black">
+                                  {cantidad}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    cambiarCantidadNuevoPedido(producto, 1);
+                                  }}
+                                  className="flex h-9 items-center justify-center text-orange-300"
+                                  aria-label={`Agregar ${producto.nombre}`}
+                                >
+                                  <PlusIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/[0.12] p-8 text-center text-sm text-neutral-500">
+                    No hay productos disponibles para este restaurante.
+                  </div>
+                )}
+              </section>
+
+              <div className="min-w-0 shrink-0 border-t border-white/[0.08] bg-[#111] p-3 md:col-start-2 md:p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">
+                      Pedido
+                    </p>
+                    <p className="mt-1 truncate text-sm font-black text-yellow-300">
+                      {cantidadNuevoPedido} items · {formatCurrency(totalNuevoPedido)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setResumenNuevoPedidoAbierto(true)}
+                    disabled={
+                      !mesaNuevoPedidoId || productosNuevoPedido.length === 0
+                    }
+                    className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[#E85D26] px-5 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+                  >
+                    Ver resumen
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resumenNuevoPedidoAbierto && (
+        <div className="fixed inset-0 z-40 flex items-end bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6">
+          <div className="flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-white/[0.08] bg-[#141414] shadow-2xl shadow-black sm:mx-auto sm:max-w-md sm:rounded-2xl sm:border">
+            <div className="shrink-0 border-b border-white/[0.08] px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-yellow-300">
+                    Resumen
+                  </p>
+                  <h2 className="truncate text-lg font-black">Confirmar pedido</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setResumenNuevoPedidoAbierto(false)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-neutral-300"
+                  aria-label="Cerrar resumen"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-neutral-400">Mesa</span>
+                  <span className="font-bold text-neutral-100">
+                    {mesaNuevoPedido
+                      ? `Mesa ${mesaNuevoPedido.numero_mesa}`
+                      : "Sin mesa"}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-neutral-400">Items</span>
+                  <span className="font-black text-yellow-300">
+                    {cantidadNuevoPedido}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+              {productosNuevoPedido.map((item) => (
+                <article
+                  key={item.producto.id}
+                  className="rounded-xl border border-yellow-300/20 bg-yellow-300/10 p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="line-clamp-2 text-sm font-black text-yellow-300">
+                        {item.producto.nombre}
+                      </h3>
+                      <p className="mt-1 text-xs font-bold text-neutral-400">
+                        {formatCurrency(item.producto.precio)} c/u
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-black text-yellow-300">
+                      {formatCurrency(item.producto.precio * item.cantidad)}
+                    </p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">
+                      Cantidad
+                    </span>
+                    <div className="grid grid-cols-[42px_42px_42px] items-center rounded-xl border border-white/[0.08] bg-black/20">
+                      <button
+                        type="button"
+                        onClick={() => cambiarCantidadNuevoPedido(item.producto, -1)}
+                        className="flex h-10 items-center justify-center text-neutral-300"
+                        aria-label={`Restar ${item.producto.nombre}`}
+                      >
+                        <MinusIcon className="h-4 w-4" />
+                      </button>
+                      <span className="text-center text-base font-black text-neutral-100">
+                        {item.cantidad}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => cambiarCantidadNuevoPedido(item.producto, 1)}
+                        className="flex h-10 items-center justify-center text-yellow-300"
+                        aria-label={`Agregar ${item.producto.nombre}`}
+                      >
+                        <PlusIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="shrink-0 border-t border-white/[0.08] bg-[#111] px-4 py-4">
+              {errorNuevoPedido && (
+                <p className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
+                  {errorNuevoPedido}
+                </p>
+              )}
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-bold text-neutral-400">Total pedido</span>
+                <span className="text-xl font-black text-yellow-300">
+                  {formatCurrency(totalNuevoPedido)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={crearNuevoPedido}
+                disabled={
+                  guardandoNuevoPedido ||
+                  !mesaNuevoPedidoId ||
+                  productosNuevoPedido.length === 0
+                }
+                className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-[#E85D26] px-4 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+              >
+                {guardandoNuevoPedido ? "GUARDANDO..." : "CONFIRMAR PEDIDO"}
               </button>
             </div>
           </div>

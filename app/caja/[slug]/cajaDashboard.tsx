@@ -7,6 +7,14 @@ import { finalizarPedidoCompleto } from "./actions";
 import { CajaDashboardProps, Factura, DetalleFactura } from "./types"; // 👈 Tipos externos
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import {
+  BanknotesIcon,
+  ChevronDownIcon,
+  ClipboardDocumentCheckIcon,
+  PowerIcon,
+  UserCircleIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 
 type FormaPago = "efectivo" | "tarjeta" | "transferencia";
 
@@ -19,17 +27,58 @@ export default function CajaDashboard({
   const [facturaParaCobrar, setFacturaParaCobrar] = useState<Factura | null>(
     null,
   );
+  const [facturaParaDividir, setFacturaParaDividir] = useState<Factura | null>(
+    null,
+  );
+  const [cantidadesDivision, setCantidadesDivision] = useState<
+    Record<string, number>
+  >({});
   const [procesando, setProcesando] = useState(false);
+  const [dividiendo, setDividiendo] = useState(false);
+  const [errorDivision, setErrorDivision] = useState<string | null>(null);
   
   //estado para confirmar si ya se imprimio
   const [impresionConfirmada, setImpresionConfirmada] = useState(false) 
   //estado para bloquear cierre mientras ejecuta
   const [validandoCierre, setValidandoCierre] = useState(false);
   const [formaPago, setFormaPago] = useState<FormaPago | "">("");
+  const [menuUsuarioAbierto, setMenuUsuarioAbierto] = useState(false);
+  const [modalAperturaAbierto, setModalAperturaAbierto] = useState(false);
+  const [comentarioApertura, setComentarioApertura] = useState("");
+  const [efectivoApertura, setEfectivoApertura] = useState("");
+  const [abriendoCaja, setAbriendoCaja] = useState(false);
+  const [errorApertura, setErrorApertura] = useState<string | null>(null);
+  const [mensajeApertura, setMensajeApertura] = useState<string | null>(null);
 
 
   const supabase = createClient();
   const router = useRouter();
+
+  const detallesSeleccionadosDivision = facturaParaDividir
+    ? facturaParaDividir.detalle_facturas.filter(
+        (detalle) => (cantidadesDivision[detalle.id] ?? 0) > 0,
+      )
+    : [];
+
+  const totalDivision = detallesSeleccionadosDivision.reduce(
+    (acc, detalle) =>
+      acc +
+      Number(detalle.precio_unitario ?? 0) *
+        Number(cantidadesDivision[detalle.id] ?? 0),
+    0,
+  );
+  const unidadesSeleccionadasDivision = detallesSeleccionadosDivision.reduce(
+    (acc, detalle) => acc + Number(cantidadesDivision[detalle.id] ?? 0),
+    0,
+  );
+  const unidadesFacturaParaDividir =
+    facturaParaDividir?.detalle_facturas.reduce(
+      (acc, detalle) => acc + Number(detalle.cantidad ?? 0),
+      0,
+    ) ?? 0;
+  const divisionMueveTodaLaFactura =
+    unidadesSeleccionadasDivision > 0 &&
+    unidadesSeleccionadasDivision >= unidadesFacturaParaDividir;
 
   const playPing = useCallback(() => {
     const audio = new Audio("/sounds/notification.mp3");
@@ -95,6 +144,62 @@ export default function CajaDashboard({
     router.replace("/login");
   };
 
+  const abrirModalApertura = () => {
+    setMenuUsuarioAbierto(false);
+    setComentarioApertura("");
+    setEfectivoApertura("");
+    setErrorApertura(null);
+    setModalAperturaAbierto(true);
+  };
+
+  const handleAbrirCaja = async () => {
+    const efectivo = Number(efectivoApertura || 0);
+    if (Number.isNaN(efectivo) || efectivo < 0) {
+      setErrorApertura("El efectivo inicial debe ser cero o mayor.");
+      return;
+    }
+
+    setAbriendoCaja(true);
+    setErrorApertura(null);
+    setMensajeApertura(null);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!user) throw new Error("No se encontro usuario autenticado.");
+
+      const { error: insertError } = await supabase.from("open_caja").insert({
+        restaurante_id: restaurante.id,
+        usuario_id: user.id,
+        efectivo_apertura: efectivo,
+        notas: comentarioApertura.trim() || null,
+      });
+
+      if (insertError) throw insertError;
+
+      const { error: flagError } = await supabase.rpc("gestionar_caja_flag", {
+        modo: "abrir",
+      });
+
+      if (flagError) throw flagError;
+
+      setModalAperturaAbierto(false);
+      setComentarioApertura("");
+      setEfectivoApertura("");
+      setMensajeApertura("Caja abierta correctamente.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo abrir la caja.";
+      setErrorApertura(message);
+    } finally {
+      setAbriendoCaja(false);
+    }
+  };
+
   const handleFinalizar = async (factura: Factura) => {
     setProcesando(true);
 
@@ -111,6 +216,101 @@ export default function CajaDashboard({
     const url = `/caja/${restaurante.slug}/imprimir/${facturaId}`;
     window.open(url, "_blank", "width=400,height=600");
   };
+
+  const abrirDivisionFactura = (factura: Factura) => {
+    setFacturaParaDividir(factura);
+    setCantidadesDivision({});
+    setErrorDivision(null);
+  };
+
+  const cambiarCantidadDivision = (detalle: DetalleFactura, delta: number) => {
+    setCantidadesDivision((current) => {
+      const actual = current[detalle.id] ?? 0;
+      const siguiente = Math.max(0, Math.min(detalle.cantidad, actual + delta));
+      const copia = { ...current };
+
+      if (siguiente === 0) {
+        delete copia[detalle.id];
+      } else {
+        copia[detalle.id] = siguiente;
+      }
+
+      return copia;
+    });
+  };
+
+/*Definicion temporal con console.log para determinar el error de supabase al momento de dividir factura*/
+ const handleDividirFactura = async () => {
+  if (
+    !facturaParaDividir ||
+    detallesSeleccionadosDivision.length === 0
+  ) {
+    return;
+  }
+
+  setDividiendo(true);
+  setErrorDivision(null);
+
+  try {
+    const items = detallesSeleccionadosDivision.map((detalle) => ({
+      detalle_id: detalle.id,
+      cantidad: cantidadesDivision[detalle.id],
+    }));
+
+    console.log("=== DIVIDIENDO FACTURA ===");
+    console.log("Factura ID:", facturaParaDividir.id);
+    console.log("Items:", items);
+
+    const { data, error } = await supabase.rpc("dividir_factura", {
+      p_factura_id: facturaParaDividir.id,
+      p_items: items,
+    });
+
+    console.log("Respuesta RPC:", data);
+    console.log("Error RPC:", error);
+
+    if (error) {
+      console.error("ERROR dividir_factura:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+
+      setErrorDivision(
+        [
+          error.message,
+          error.details,
+          error.hint,
+          error.code ? `Código: ${error.code}` : null,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+      );
+
+      return;
+    }
+
+    setFacturaParaDividir(null);
+    setCantidadesDivision({});
+    router.refresh();
+
+  } catch (error: unknown) {
+    console.error("EXCEPTION dividir_factura:", error);
+
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "message" in error
+    ) {
+      setErrorDivision(String(error.message));
+    } else {
+      setErrorDivision("No se pudo dividir la factura.");
+    }
+  } finally {
+    setDividiendo(false);
+  }
+};
 
   const handleVerCuentaPDF = (factura: Factura) => {
     const doc = new jsPDF({
@@ -286,35 +486,97 @@ const handleIrACierre = async () => {
             </p>
           </div>
         </div>
-        {/* ... Resto del Header y Grid ... */}
-        <div className="flex flex-col items-end gap-3">
-          <div className="bg-emerald-500/10 text-emerald-500 px-4 py-1.5 rounded-full border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest animate-pulse flex items-center gap-2">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-            Sistema Online
-          </div>
+        <div className="relative">
           <button
-            onClick={handleIrACierre}
-            disabled={validandoCierre}
-            className={`text-[10px] font-black border px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter ${
-              validandoCierre
-                ? "cursor-not-allowed text-orange-200/60 border-orange-500/20"
-                : "text-orange-300 hover:text-orange-200 border-orange-500/30 hover:border-orange-400/50"
-            }`}
+            type="button"
+            onClick={() => setMenuUsuarioAbierto((current) => !current)}
+            className="inline-flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-800/80 px-4 py-3 text-left shadow-lg transition-colors hover:border-orange-500/40"
           >
-            {validandoCierre ? "Validando..." : "Arqueo / Cierre"}
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-300">
+              <UserCircleIcon className="h-6 w-6" />
+            </span>
+            <span className="hidden sm:block">
+              <span className="block text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                Sistema online
+              </span>
+              <span className="block text-sm font-black text-white">
+                Menu de caja
+              </span>
+            </span>
+            <ChevronDownIcon
+              className={`h-4 w-4 text-slate-400 transition-transform ${
+                menuUsuarioAbierto ? "rotate-180" : ""
+              }`}
+            />
           </button>
 
-          <button
-            onClick={handleLogout}
-            className="text-[10px] font-black text-slate-500 hover:text-red-400 border border-slate-700 hover:border-red-400/30 px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter"
-          >
-            Terminar Sesión
-          </button>
+          {menuUsuarioAbierto && (
+            <div className="absolute right-0 top-full z-30 mt-3 w-64 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+              <button
+                type="button"
+                onClick={abrirModalApertura}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-bold text-slate-200 transition-colors hover:bg-slate-800"
+              >
+                <BanknotesIcon className="h-5 w-5 text-emerald-300" />
+                Apertura de caja
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuUsuarioAbierto(false);
+                  handleIrACierre();
+                }}
+                disabled={validandoCierre}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-bold text-slate-200 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-500"
+              >
+                <ClipboardDocumentCheckIcon className="h-5 w-5 text-orange-300" />
+                {validandoCierre ? "Validando..." : "Arqueo / cierre"}
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 border-t border-slate-800 px-4 py-3 text-left text-sm font-bold text-red-300 transition-colors hover:bg-red-500/10"
+              >
+                <PowerIcon className="h-5 w-5" />
+                Terminar sesion
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 print:hidden">
-        {facturas.map((fac: Factura) => (
+      {mensajeApertura && (
+        <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-200 print:hidden">
+          {mensajeApertura}
+        </div>
+      )}
+
+      {facturas.length === 0 ? (
+        <section className="flex min-h-[55vh] items-center justify-center print:hidden">
+          <div className="max-w-md text-center">
+            <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-full border border-slate-700 bg-slate-800/70 shadow-2xl">
+              <div className="relative">
+                <div className="text-6xl font-black text-slate-600">Z</div>
+                <div className="absolute -right-8 -top-6 text-4xl font-black text-slate-500">
+                  Z
+                </div>
+                <div className="absolute -right-14 -top-11 text-2xl font-black text-slate-400">
+                  Z
+                </div>
+              </div>
+            </div>
+            <h2 className="mt-6 text-2xl font-black text-white">
+              Nada por aqui
+            </h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">
+              Relajate un rato. Cuando haya facturas pendientes apareceran en
+              este panel.
+            </p>
+          </div>
+        </section>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 print:hidden">
+          {facturas.map((fac: Factura) => (
           <div
             key={fac.id}
             className="bg-slate-800 rounded-3xl border-2 border-slate-700 p-5 flex flex-col shadow-xl"
@@ -363,9 +625,17 @@ const handleIrACierre = async () => {
             >
               Ver Cuenta
             </button>
+            <button
+              onClick={() => abrirDivisionFactura(fac)}
+              disabled={fac.detalle_facturas.length === 0}
+              className="mt-3 w-full bg-sky-700 hover:bg-sky-600 disabled:bg-slate-700 disabled:text-slate-500 text-white font-black py-3 rounded-xl transition-all uppercase tracking-widest text-xs"
+            >
+              Dividir Factura
+            </button>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
 {/* MODAL DE TICKET */}
 {facturaParaCobrar && (
@@ -430,6 +700,214 @@ const handleIrACierre = async () => {
           }`}
         >
           {procesando ? 'Procesando...' : '✅ Confirmar y Liberar Mesa'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{modalAperturaAbierto && (
+  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm print:hidden sm:items-center">
+    <div className="w-full rounded-t-3xl border-t border-slate-700 bg-slate-900 p-6 shadow-2xl sm:max-w-md sm:rounded-3xl sm:border">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-widest text-emerald-300">
+            Apertura
+          </p>
+          <h2 className="mt-1 text-xl font-black text-white">
+            Abrir caja
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setModalAperturaAbierto(false);
+            setErrorApertura(null);
+          }}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 text-slate-300"
+          aria-label="Cerrar apertura de caja"
+        >
+          <XMarkIcon className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <label className="block">
+          <span className="mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-500">
+            Comentario de apertura
+          </span>
+          <textarea
+            value={comentarioApertura}
+            onChange={(event) => setComentarioApertura(event.target.value)}
+            rows={3}
+            className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm font-semibold text-white outline-none transition-colors focus:border-emerald-400"
+            placeholder="Ej: Inicio de turno matutino"
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-[11px] font-black uppercase tracking-widest text-slate-500">
+            Efectivo recibido
+          </span>
+          <div className="flex overflow-hidden rounded-xl border border-slate-700 bg-slate-950 focus-within:border-emerald-400">
+            <span className="flex items-center border-r border-slate-700 px-3 text-sm font-black text-emerald-300">
+              L.
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={efectivoApertura}
+              onChange={(event) => setEfectivoApertura(event.target.value)}
+              className="h-12 min-w-0 flex-1 bg-transparent px-3 text-sm font-semibold text-white outline-none"
+              placeholder="0.00"
+            />
+          </div>
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            Si se deja vacio, se registrara L. 0.00.
+          </p>
+        </label>
+      </div>
+
+      {errorApertura && (
+        <p className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">
+          {errorApertura}
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={handleAbrirCaja}
+        disabled={abriendoCaja}
+        className="mt-5 h-12 w-full rounded-xl bg-emerald-600 px-4 text-sm font-black uppercase tracking-widest text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500"
+      >
+        {abriendoCaja ? "Abriendo..." : "Abrir caja"}
+      </button>
+    </div>
+  </div>
+)}
+
+{facturaParaDividir && (
+  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm print:hidden sm:items-center">
+    <div className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-slate-700 bg-slate-900 shadow-2xl sm:max-w-lg sm:rounded-3xl sm:border">
+      <div className="border-b border-slate-800 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-sky-300">
+              Dividir factura
+            </p>
+            <h2 className="mt-1 text-xl font-black text-white">
+              Mesa {facturaParaDividir.mesas?.numero_mesa} · Pedido #
+              {facturaParaDividir.numero_pedido_amigable}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFacturaParaDividir(null);
+              setCantidadesDivision({});
+              setErrorDivision(null);
+            }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 text-slate-300"
+            aria-label="Cerrar division"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="mt-3 text-sm leading-6 text-slate-400">
+          Selecciona los productos que pasarán a una nueva factura.
+        </p>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+        {facturaParaDividir.detalle_facturas.map((detalle) => {
+          const cantidadSeleccionada = cantidadesDivision[detalle.id] ?? 0;
+
+          return (
+            <article
+              key={detalle.id}
+              className={`rounded-2xl border p-4 ${
+                cantidadSeleccionada > 0
+                  ? "border-sky-400/40 bg-sky-500/10"
+                  : "border-slate-700 bg-slate-800/60"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black text-white">
+                    {detalle.productos.nombre}
+                  </h3>
+                  <p className="mt-1 text-xs font-bold text-slate-400">
+                    Disponible: {detalle.cantidad} · L.{" "}
+                    {detalle.precio_unitario.toFixed(2)} c/u
+                  </p>
+                </div>
+                <p className="shrink-0 text-sm font-black text-sky-300">
+                  L. {(detalle.precio_unitario * cantidadSeleccionada).toFixed(2)}
+                </p>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                  A mover
+                </span>
+                <div className="grid grid-cols-[42px_42px_42px] items-center rounded-xl border border-slate-700 bg-slate-950/40">
+                  <button
+                    type="button"
+                    onClick={() => cambiarCantidadDivision(detalle, -1)}
+                    disabled={cantidadSeleccionada === 0}
+                    className="flex h-10 items-center justify-center text-slate-300 disabled:text-slate-700"
+                  >
+                    -
+                  </button>
+                  <span className="text-center text-base font-black text-white">
+                    {cantidadSeleccionada}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => cambiarCantidadDivision(detalle, 1)}
+                    disabled={cantidadSeleccionada >= detalle.cantidad}
+                    className="flex h-10 items-center justify-center text-sky-300 disabled:text-slate-700"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="border-t border-slate-800 bg-slate-950/70 p-5">
+        {errorDivision && (
+          <p className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">
+            {errorDivision}
+          </p>
+        )}
+        {divisionMueveTodaLaFactura && (
+          <p className="mb-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-sm font-bold text-yellow-200">
+            La factura original debe conservar al menos un producto.
+          </p>
+        )}
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <span className="text-sm font-black uppercase tracking-widest text-slate-400">
+            Nueva factura
+          </span>
+          <span className="text-2xl font-black text-sky-300">
+            L. {totalDivision.toFixed(2)}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={handleDividirFactura}
+          disabled={
+            dividiendo ||
+            detallesSeleccionadosDivision.length === 0 ||
+            divisionMueveTodaLaFactura
+          }
+          className="h-12 w-full rounded-xl bg-sky-700 px-4 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500"
+        >
+          {dividiendo ? "Dividiendo..." : "Confirmar división"}
         </button>
       </div>
     </div>

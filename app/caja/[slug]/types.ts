@@ -6,6 +6,7 @@ export interface DetalleFactura {
   precio_unitario: number;
   subtotal: number;
   notas?: string;
+  producto_id?: string;
   productos: {
     nombre: string;
   };

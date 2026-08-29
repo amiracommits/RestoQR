@@ -195,4 +195,10 @@ git push origin main
 
 sasa
 BlackMamba26
-s
+s\
+
+mergiar las ramas dev a prod 
+git checkout main
+git pull origin main
+git merge dev
+git push origin main

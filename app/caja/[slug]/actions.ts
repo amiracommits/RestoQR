@@ -54,6 +54,15 @@ export async function ejecutarCierreCaja(formData: FormData): Promise<void> {
     console.error("❌ Error al ejecutar RPC cerrar_caja_restaurante:", error.message);
     throw new Error(error.message);
   }
+
+  const { error: flagError } = await supabase.rpc("gestionar_caja_flag", {
+    modo: "cerrar",
+  });
+
+  if (flagError) {
+    console.error("❌ Error al cerrar flag de caja:", flagError.message);
+    throw new Error(flagError.message);
+  }
   
 
   revalidatePath(`/caja/${slug}`);

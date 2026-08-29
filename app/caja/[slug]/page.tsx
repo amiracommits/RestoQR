@@ -33,6 +33,7 @@ export default async function CajaPage({
       mesas (id, numero_mesa),
       detalle_facturas (
         id,
+        producto_id,
         cantidad,
         precio_unitario,
         subtotal,

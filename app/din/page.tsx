@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import DinDashboard, {
   CategoriaMenuDin,
   FacturaActiva,
+  MesaDin,
   RestauranteDin,
 } from "./DinDashboard";
 
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 interface PerfilMesero {
   rol: string;
   restaurante_id: string | null;
+  nombre_usuario?: string | null;
 }
 
 export default async function DinPage() {
@@ -24,7 +26,7 @@ export default async function DinPage() {
 
   const { data: perfilData } = await supabase
     .from("perfiles_admin")
-    .select("rol, restaurante_id")
+    .select("rol, restaurante_id, nombre_usuario")
     .eq("id", user.id)
     .single();
 
@@ -70,6 +72,16 @@ export default async function DinPage() {
 
   if (facturasError) {
     console.error("Error cargando facturas activas para DIN:", facturasError.message);
+  }
+
+  const { data: mesasData, error: mesasError } = await supabase
+    .from("mesas")
+    .select("id, numero_mesa, estado")
+    .eq("restaurante_id", perfil.restaurante_id)
+    .order("numero_mesa");
+
+  if (mesasError) {
+    console.error("Error cargando mesas para DIN:", mesasError.message);
   }
 
   const { data: productosData, error: productosError } = await supabase
@@ -122,7 +134,9 @@ export default async function DinPage() {
   return (
     <DinDashboard
       restaurante={restaurante}
+      meseroNombre={perfil.nombre_usuario || user.email || "Mesero"}
       facturas={(facturasData as unknown as FacturaActiva[]) || []}
+      mesas={(mesasData as MesaDin[]) || []}
       menu={menu}
     />
   );
