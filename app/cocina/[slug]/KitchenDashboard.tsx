@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
+import jsPDF from "jspdf";
 
 // --- INTERFACES (Tus definiciones originales) ---
 interface DetallePedido {
@@ -134,6 +135,135 @@ export default function KitchenDashboard({
     if (error) throw error;
 
     return data?.is_caja_abierta === true;
+  };
+
+  const cargarImagenComoDataUrl = (url: string) =>
+    new Promise<string>((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("No se pudo preparar el logo."));
+          return;
+        }
+
+        context.drawImage(image, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      image.onerror = () => reject(new Error("No se pudo cargar el logo."));
+      image.src = url;
+    });
+
+  const handleGenerarComanda = async (pedido: Pedido) => {
+    const previewWindow = window.open("", "_blank");
+    const doc = new jsPDF({
+      unit: "mm",
+      format: [80, 220],
+    });
+
+    let y = 8;
+    const pageWidth = 80;
+    const marginX = 6;
+    const contentWidth = pageWidth - marginX * 2;
+
+    if (restaurante.logo_url) {
+      try {
+        const logoDataUrl = await cargarImagenComoDataUrl(restaurante.logo_url);
+        doc.addImage(logoDataUrl, "PNG", 31, y, 18, 18);
+        y += 22;
+      } catch (error) {
+        console.warn("No se pudo agregar el logo a la comanda:", error);
+      }
+    }
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(restaurante.nombre.toUpperCase(), pageWidth / 2, y, {
+      align: "center",
+      maxWidth: contentWidth,
+    });
+
+    y += 6;
+    doc.setFontSize(10);
+    doc.text("COMANDA DE COCINA", pageWidth / 2, y, { align: "center" });
+
+    y += 5;
+    doc.setLineWidth(0.2);
+    doc.line(marginX, y, pageWidth - marginX, y);
+
+    y += 6;
+    doc.setFontSize(9);
+    doc.text(`Mesa: ${pedido.mesas?.numero_mesa || "S/N"}`, marginX, y);
+    y += 5;
+    doc.text(`Pedido: #${pedido.numero_pedido_dia ?? "S/N"}`, marginX, y);
+    y += 5;
+    doc.text(
+      `Tipo: ${pedido.es_adicional ? "ADICIONAL" : "PRINCIPAL"}`,
+      marginX,
+      y,
+    );
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      `Hora: ${new Date(pedido.created_at).toLocaleString("es-HN")}`,
+      marginX,
+      y,
+    );
+
+    y += 6;
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 6;
+
+    pedido.detalle_pedidos?.forEach((detalle, index) => {
+      if (y > 205) {
+        doc.addPage([80, 220]);
+        y = 8;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      const producto = `${index + 1}. ${detalle.cantidad}x ${
+        detalle.productos?.nombre || "Producto"
+      }`;
+      const productoLineas = doc.splitTextToSize(producto, contentWidth);
+      doc.text(productoLineas, marginX, y);
+      y += productoLineas.length * 5;
+
+      if (detalle.notas) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        const notaLineas = doc.splitTextToSize(
+          `Nota: ${detalle.notas}`,
+          contentWidth - 4,
+        );
+        doc.text(notaLineas, marginX + 4, y);
+        y += notaLineas.length * 4;
+      }
+
+      y += 3;
+    });
+
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 6;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Preparar segun detalle.", pageWidth / 2, y, {
+      align: "center",
+    });
+
+    const pdfUrl = doc.output("bloburl");
+
+    if (previewWindow) {
+      previewWindow.location.href = pdfUrl;
+    } else {
+      window.open(pdfUrl, "_blank");
+    }
   };
 
   /*DEPRECADO <ESTA FUNCION YA NO SE LLAMA DESDE EL BOTON DE COMPLETAR PEDIDO
@@ -314,8 +444,16 @@ export default function KitchenDashboard({
                 )}
               </div>
 
-              <div className="p-4 bg-slate-900/30">
+              <div className="space-y-3 p-4 bg-slate-900/30">
                 <button
+                  type="button"
+                  onClick={() => handleGenerarComanda(pedido)}
+                  className="w-full rounded-2xl border border-orange-500/30 bg-orange-500/10 py-4 font-black text-orange-200 shadow-lg shadow-orange-900/10 transition-all hover:bg-orange-500/20 active:scale-95"
+                >
+                  GENERAR COMANDA
+                </button>
+                <button
+                  type="button"
                   onClick={() => completarPedido(pedido.id)}
                   className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-900/20"
                 >
