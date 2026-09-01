@@ -29,6 +29,7 @@ interface Restaurante {
   id: string;
   nombre: string;
   slug: string;
+  is_caja_abierta?: boolean | null;
   logo_url?: string;
 }
 
@@ -125,17 +126,14 @@ export default function KitchenDashboard({
 
   const cajaEstaAbierta = async () => {
     const { data, error } = await supabase
-      .from("configuracion_global")
-      .select("*")
-      .eq("clave", "caja")
-      .maybeSingle();
+      .from("restaurantes")
+      .select("is_caja_abierta")
+      .eq("id", restaurante.id)
+      .single();
 
     if (error) throw error;
 
-    const config = data as { activo?: boolean | string | null; valor?: boolean | string | null } | null;
-    const estadoCaja = config?.activo ?? config?.valor;
-
-    return estadoCaja === true || String(estadoCaja).toLowerCase() === "true";
+    return data?.is_caja_abierta === true;
   };
 
   /*DEPRECADO <ESTA FUNCION YA NO SE LLAMA DESDE EL BOTON DE COMPLETAR PEDIDO
@@ -182,13 +180,11 @@ export default function KitchenDashboard({
     try {
       cajaAbierta = await cajaEstaAbierta();
     } catch (error) {
-      console.error("Error validando configuracion de caja:", error);
+      console.error("Error validando estado de caja del restaurante:", error);
     }
 
     if (!cajaAbierta) {
-      setMensajeCajaCerrada(
-        "No se puede facturar por que la caja no se ha abierto todavia",
-      );
+      setMensajeCajaCerrada("La caja no esta abierta.");
       return;
     }
 

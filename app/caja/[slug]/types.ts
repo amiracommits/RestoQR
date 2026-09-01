@@ -30,6 +30,7 @@ export interface Restaurante {
   id: string;
   nombre: string;
   slug: string;
+  is_caja_abierta?: boolean | null;
   logo_url?: string;
 }
 

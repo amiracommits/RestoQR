@@ -80,7 +80,9 @@ https://arpcomandix.vercel.app/afrodita-cafe?mesa=fa5b851c-e813-478f-9502-b178e7
 
 
 URL de afrodita
-http://192.168.1.8:3005/afrodita-cafe?mesa=88d5e4e3-84f0-4c27-8922-8b4564fe7c86
+http://192.168.1.8:3005/puerto-diez-cero-seis?mesa=dec925b8-9483-4909-a75d-113f14cbd7b3
+
+
 http://192.168.1.8:3005/afrodita-cafe?mesa=33ad825a-ad48-46b2-9c0a-03292b64ac35
 
 
@@ -202,3 +204,17 @@ git checkout main
 git pull origin main
 git merge dev
 git push origin main
+
+
+
+
+
+--update perfiles_admin
+--set restaurante_id = '969435c5-b28d-43a6-8b4a-8eef93eb884d', nombre_usuario = 'yasmin reyes', rol = 'admin'
+--where id ='6649899a-9c8b-4514-804b-819848761c39'
+
+
+--select * from perfiles_admin
+
+
+
