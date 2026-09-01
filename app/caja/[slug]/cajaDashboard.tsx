@@ -164,33 +164,32 @@ export default function CajaDashboard({
     setMensajeApertura(null);
 
     try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      const { data: estadoCaja, error: estadoError } = await supabase
+        .from("restaurantes")
+        .select("is_caja_abierta")
+        .eq("id", restaurante.id)
+        .single();
 
-      if (userError) throw userError;
-      if (!user) throw new Error("No se encontro usuario autenticado.");
+      if (estadoError) throw estadoError;
 
-      const { error: insertError } = await supabase.from("open_caja").insert({
-        restaurante_id: restaurante.id,
-        usuario_id: user.id,
-        efectivo_apertura: efectivo,
-        notas: comentarioApertura.trim() || null,
+      if (estadoCaja?.is_caja_abierta) {
+        setErrorApertura("No se puede abrir la caja porque ya esta abierta.");
+        return;
+      }
+
+      const { error: rpcError } = await supabase.rpc("open_caja_record", {
+        p_restaurante_id: restaurante.id,
+        p_efectivo_apertura: efectivo,
+        p_notas: comentarioApertura.trim() || null,
       });
 
-      if (insertError) throw insertError;
-
-      const { error: flagError } = await supabase.rpc("gestionar_caja_flag", {
-        modo: "abrir",
-      });
-
-      if (flagError) throw flagError;
+      if (rpcError) throw rpcError;
 
       setModalAperturaAbierto(false);
       setComentarioApertura("");
       setEfectivoApertura("");
       setMensajeApertura("Caja abierta correctamente.");
+      router.refresh();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "No se pudo abrir la caja.";

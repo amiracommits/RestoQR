@@ -39,6 +39,7 @@ export interface RestauranteDin {
   id: string;
   nombre: string;
   slug: string;
+  is_caja_abierta?: boolean | null;
   logo_url?: string | null;
 }
 
@@ -215,17 +216,14 @@ export default function DinDashboard({
 
   const cajaEstaAbierta = async () => {
     const { data, error } = await supabase
-      .from("configuracion_global")
-      .select("*")
-      .eq("clave", "caja")
-      .maybeSingle();
+      .from("restaurantes")
+      .select("is_caja_abierta")
+      .eq("id", restaurante.id)
+      .single();
 
     if (error) throw error;
 
-    const config = data as { activo?: boolean | string | null; valor?: boolean | string | null } | null;
-    const estadoCaja = config?.valor ?? config?.activo;
-
-    return estadoCaja === true || String(estadoCaja).toLowerCase() === "true";
+    return data?.is_caja_abierta === true;
   };
 
   const toggleFacturaExpandida = (facturaId: string) => {
@@ -321,9 +319,7 @@ export default function DinDashboard({
       const cajaAbierta = await cajaEstaAbierta();
 
       if (!cajaAbierta) {
-        setErrorNuevoPedido(
-          "No es posible facturar por que la caja no se ha abierto todavia",
-        );
+        setErrorNuevoPedido("La caja no esta abierta.");
         return;
       }
 
