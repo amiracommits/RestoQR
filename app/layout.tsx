@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Zanate Food - Pedidos",
+  title: "Comandix",
   description: "Sistema de pedidos por QR",
 };
 

@@ -218,3 +218,33 @@ git push origin main
 
 
 
+COMANDOS DE GIT PARA IMPACTAR LOS CAMBIOS EN LA RAMA dev
+
+
+/conocer los cambios que se van a mandar
+git status 
+
+/Guardar los cambios en la rama local 
+git add .
+git commit -m "Aquí va la descripción de tus cambios"
+
+/subir los cambios a la rama dev de github
+git push origin dev
+git push
+
+
+COMANDOS PARA IMPACTAR LA RAMA MAIN EN GITHUB 
+/primero switchear la rama main
+git checkout main
+
+/asegurarse de que la rama main local tenga mapeados los cambios 
+git pull origin main
+
+/hacer el merge de la rama dev a main local
+git merge dev
+
+/hacer push de los cambios 
+git push origin main
+
+
+

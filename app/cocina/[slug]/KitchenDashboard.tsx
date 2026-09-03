@@ -137,28 +137,6 @@ export default function KitchenDashboard({
     return data?.is_caja_abierta === true;
   };
 
-  const cargarImagenComoDataUrl = (url: string) =>
-    new Promise<string>((resolve, reject) => {
-      const image = new Image();
-      image.crossOrigin = "anonymous";
-      image.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-
-        const context = canvas.getContext("2d");
-        if (!context) {
-          reject(new Error("No se pudo preparar el logo."));
-          return;
-        }
-
-        context.drawImage(image, 0, 0);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      image.onerror = () => reject(new Error("No se pudo cargar el logo."));
-      image.src = url;
-    });
-
   const handleGenerarComanda = async (pedido: Pedido) => {
     const previewWindow = window.open("", "_blank");
     const doc = new jsPDF({
@@ -170,16 +148,6 @@ export default function KitchenDashboard({
     const pageWidth = 80;
     const marginX = 6;
     const contentWidth = pageWidth - marginX * 2;
-
-    if (restaurante.logo_url) {
-      try {
-        const logoDataUrl = await cargarImagenComoDataUrl(restaurante.logo_url);
-        doc.addImage(logoDataUrl, "PNG", 31, y, 18, 18);
-        y += 22;
-      } catch (error) {
-        console.warn("No se pudo agregar el logo a la comanda:", error);
-      }
-    }
 
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "bold");
@@ -347,14 +315,26 @@ export default function KitchenDashboard({
 
   return (
     <main className="p-6">
-      <header className="flex justify-between items-start mb-8 border-b border-slate-800 pb-4">
-        <div>
-          <h1 className="text-3xl font-black text-orange-500 uppercase tracking-tight">
-            COCINA: {restaurante?.nombre || "Cargando..."}
-          </h1>
-          <p className="text-slate-400 font-bold text-sm">
-            Cola de Comandas en Tiempo Real
-          </p>
+      <header className="flex justify-between items-start gap-4 mb-8 border-b border-slate-800 pb-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/70">
+            {restaurante?.logo_url ? (
+              <img
+                src={restaurante.logo_url}
+                alt={`Logo ${restaurante?.nombre || "restaurante"}`}
+                className="h-full w-full object-contain p-2"
+              />
+            ) : (
+              <span className="text-xs font-black uppercase tracking-widest text-slate-500">
+                Logo
+              </span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-3xl font-black text-orange-500 uppercase tracking-tight">
+              COLA DE PEDIDOS
+            </h1>
+          </div>
         </div>
         {/* ... Resto del Header y Grid ... */}
         <div className="flex flex-col items-end gap-3">

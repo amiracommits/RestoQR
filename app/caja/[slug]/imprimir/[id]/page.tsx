@@ -51,7 +51,7 @@ export default async function PaginaImpresion({
 
 
   return (
-    <div className="bg-white min-h-screen p-4 flex justify-center">
+    <div className="bg-white min-h-screen p-0 flex justify-center">
       {/* Estilo específico para papel térmico de 80mm y tipografía monoespaciada */}
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
@@ -62,6 +62,8 @@ export default async function PaginaImpresion({
           width: 80mm; 
           font-family: 'Courier New', Courier, monospace; 
           line-height: 1.2;
+          margin: 0;
+          padding: 0;
         }
       `}}/>
 
@@ -70,11 +72,11 @@ export default async function PaginaImpresion({
         <div className="text-center space-y-1 mb-4">
           {/* 1. Logo del Restaurante */}
           {factura.restaurantes?.logo_url && (
-            <div className="flex justify-center mb-2">
+            <div className="mb-2 flex justify-center">
               <img 
                 src={factura.restaurantes.logo_url} 
                 alt="Logo" 
-                className="w-20 h-20 object-contain"
+                className="h-auto max-h-28 w-full object-contain"
               />
             </div>
           )}
