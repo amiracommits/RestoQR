@@ -48,14 +48,21 @@ export default async function IndexPage() {
   }
 
   /**
-   * 2. ADMIN (Dueño/Gerente de un Restaurante específico)
+   * 2. CONTABILIDAD
+   */
+  if (rolUser === 'conta') {
+    return redirect('/conta');
+  }
+
+  /**
+   * 3. ADMIN (Dueño/Gerente de un Restaurante específico)
    */
   if (rolUser === 'admin') {
     return redirect('/admin/dashboard');
   } 
   
   /**
-   * 3. COCINA
+   * 4. COCINA
    */
   if (rolUser === 'cocina') {
     if (!userSlug) {
@@ -66,7 +73,7 @@ export default async function IndexPage() {
   }
 
   /**
-   * 4. CAJERO
+   * 5. CAJERO
    */
   if (rolUser === 'cajero') {
     if (!userSlug) {
@@ -77,7 +84,7 @@ export default async function IndexPage() {
   }
 
   /**
-   * 5. MESEROS
+   * 6. MESEROS
    */
   if (rolUser === 'meseros') {
     if (!perfil.restaurante_id) {

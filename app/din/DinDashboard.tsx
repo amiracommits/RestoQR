@@ -85,6 +85,15 @@ const formatTime = (value: string) =>
     minute: "2-digit",
   }).format(new Date(value));
 
+const getErrorField = (error: unknown, field: string) => {
+  if (typeof error !== "object" || error === null || !(field in error)) {
+    return null;
+  }
+
+  const value = (error as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : null;
+};
+
 export default function DinDashboard({
   restaurante,
   meseroNombre,
@@ -281,13 +290,15 @@ export default function DinDashboard({
     setGuardando(true);
     setErrorModal(null);
 
+    const items = productosSeleccionados.map((item) => ({
+      producto_id: item.producto.id,
+      cantidad: item.cantidad,
+    }));
+
     try {
       const { error } = await supabase.rpc("agregar_productos_factura_mesero", {
         p_factura_id: facturaSeleccionada.id,
-        p_items: productosSeleccionados.map((item) => ({
-          producto_id: item.producto.id,
-          cantidad: item.cantidad,
-        })),
+        p_items: items,
       });
 
       if (error) throw error;
@@ -298,11 +309,31 @@ export default function DinDashboard({
       setFacturaSeleccionada(null);
       router.refresh();
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No se pudieron agregar los productos a la factura.";
-      setErrorModal(message);
+      const message = getErrorField(error, "message");
+      const details = getErrorField(error, "details");
+      const hint = getErrorField(error, "hint");
+      const code = getErrorField(error, "code");
+
+      console.error("EXCEPTION agregar_productos_factura_mesero:", {
+        error,
+        code,
+        message,
+        details,
+        hint,
+        facturaId: facturaSeleccionada.id,
+        items,
+      });
+
+      setErrorModal(
+        [
+          message ?? "No se pudieron agregar los productos a la factura.",
+          details,
+          hint,
+          code ? `Codigo: ${code}` : null,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+      );
     } finally {
       setGuardando(false);
     }
