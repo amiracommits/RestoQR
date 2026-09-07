@@ -91,6 +91,12 @@ export default async function DinPage() {
       nombre,
       precio,
       descripcion,
+      es_complemento,
+      es_plato_compuesto,
+      cant_complementos,
+      admite_flavors,
+      bar_only,
+      productos_flavors (id, nombre, orden),
       categorias (id, nombre, orden)
     `)
     .eq("restaurante_id", perfil.restaurante_id)
@@ -124,6 +130,12 @@ export default async function DinPage() {
       nombre: producto.nombre,
       precio: Number(producto.precio ?? 0),
       descripcion: producto.descripcion,
+      es_complemento: Boolean(producto.es_complemento),
+      es_plato_compuesto: Boolean(producto.es_plato_compuesto),
+      cant_complementos: Number(producto.cant_complementos ?? 0),
+      admite_flavors: Boolean(producto.admite_flavors),
+      bar_only: Boolean(producto.bar_only),
+      productos_flavors: producto.productos_flavors ?? [],
     });
   }
 

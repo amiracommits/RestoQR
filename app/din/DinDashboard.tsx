@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRightOnRectangleIcon,
@@ -54,6 +54,18 @@ export interface ProductoMenuDin {
   nombre: string;
   precio: number;
   descripcion?: string | null;
+  es_complemento?: boolean;
+  es_plato_compuesto?: boolean;
+  cant_complementos?: number;
+  admite_flavors?: boolean;
+  bar_only?: boolean;
+  productos_flavors?: ProductoFlavorDin[];
+}
+
+export interface ProductoFlavorDin {
+  id: string;
+  nombre: string;
+  orden?: number | null;
 }
 
 export interface CategoriaMenuDin {
@@ -76,8 +88,16 @@ interface ProductoSeleccionado {
   cantidad: number;
 }
 
-const formatCurrency = (value: number) =>
-  `L. ${Number(value ?? 0).toFixed(2)}`;
+type PedidoWizardPaso =
+  "productos" | "notas" | "complementos" | "flavors" | "resumen";
+
+type ComplementosSeleccionados = Record<string, string[]>;
+
+type FlavorsSeleccionados = Record<string, string>;
+
+type NotasSeleccionadas = Record<string, string>;
+
+const formatCurrency = (value: number) => `L. ${Number(value ?? 0).toFixed(2)}`;
 
 const formatTime = (value: string) =>
   new Intl.DateTimeFormat("es-HN", {
@@ -106,10 +126,10 @@ export default function DinDashboard({
   const [facturaSeleccionada, setFacturaSeleccionada] =
     useState<FacturaActiva | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
-  const [resumenAbierto, setResumenAbierto] = useState(false);
+  const [facturaPaso, setFacturaPaso] = useState<PedidoWizardPaso>("productos");
   const [nuevoPedidoAbierto, setNuevoPedidoAbierto] = useState(false);
-  const [resumenNuevoPedidoAbierto, setResumenNuevoPedidoAbierto] =
-    useState(false);
+  const [nuevoPedidoPaso, setNuevoPedidoPaso] =
+    useState<PedidoWizardPaso>("productos");
   const [mesaNuevoPedidoId, setMesaNuevoPedidoId] = useState("");
   const [categoriaSeleccionadaId, setCategoriaSeleccionadaId] = useState(
     menu[0]?.id ?? "",
@@ -123,6 +143,19 @@ export default function DinDashboard({
   const [seleccionadosNuevoPedido, setSeleccionadosNuevoPedido] = useState<
     Record<string, ProductoSeleccionado>
   >({});
+  const [complementosFactura, setComplementosFactura] =
+    useState<ComplementosSeleccionados>({});
+  const [notasFactura, setNotasFactura] = useState<NotasSeleccionadas>({});
+  const [flavorsFactura, setFlavorsFactura] = useState<FlavorsSeleccionados>(
+    {},
+  );
+  const [complementosNuevoPedido, setComplementosNuevoPedido] =
+    useState<ComplementosSeleccionados>({});
+  const [notasNuevoPedido, setNotasNuevoPedido] = useState<NotasSeleccionadas>(
+    {},
+  );
+  const [flavorsNuevoPedido, setFlavorsNuevoPedido] =
+    useState<FlavorsSeleccionados>({});
   const [facturasExpandidas, setFacturasExpandidas] = useState<
     Record<string, boolean>
   >({});
@@ -133,9 +166,36 @@ export default function DinDashboard({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const totalActivo = useMemo(
-    () => facturas.reduce((acc, factura) => acc + Number(factura.total ?? 0), 0),
+    () =>
+      facturas.reduce((acc, factura) => acc + Number(factura.total ?? 0), 0),
     [facturas],
   );
+
+  useEffect(() => {
+    if (!restaurante.id) return;
+
+    const channel = supabase
+      .channel(`cambios-facturas-din-${restaurante.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "facturas",
+          filter: `restaurante_id=eq.${restaurante.id}`,
+        },
+        () => router.refresh(),
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.error("Realtime facturas DIN no pudo suscribirse");
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [restaurante.id, router, supabase]);
 
   const categoriaSeleccionada = useMemo(
     () =>
@@ -147,6 +207,16 @@ export default function DinDashboard({
   const productosSeleccionados = useMemo(
     () => Object.values(seleccionados),
     [seleccionados],
+  );
+
+  const productosFacturaBar = useMemo(
+    () => productosSeleccionados.filter((item) => item.producto.bar_only),
+    [productosSeleccionados],
+  );
+
+  const productosFacturaCocina = useMemo(
+    () => productosSeleccionados.filter((item) => !item.producto.bar_only),
+    [productosSeleccionados],
   );
 
   const categoriaNuevoPedido = useMemo(
@@ -161,6 +231,119 @@ export default function DinDashboard({
     [seleccionadosNuevoPedido],
   );
 
+  const listaComplementos = useMemo(
+    () =>
+      menu
+        .flatMap((categoria) => categoria.items)
+        .filter((producto) => producto.es_complemento),
+    [menu],
+  );
+
+  const productosCompuestosNuevoPedido = useMemo(
+    () =>
+      productosNuevoPedido.filter(
+        (item) =>
+          item.producto.es_plato_compuesto &&
+          Number(item.producto.cant_complementos ?? 0) > 0,
+      ),
+    [productosNuevoPedido],
+  );
+
+  const productosCompuestosFactura = useMemo(
+    () =>
+      productosSeleccionados.filter(
+        (item) =>
+          item.producto.es_plato_compuesto &&
+          Number(item.producto.cant_complementos ?? 0) > 0,
+      ),
+    [productosSeleccionados],
+  );
+
+  const productosConNotasNuevoPedido = useMemo(
+    () =>
+      productosNuevoPedido.filter(
+        (item) => !item.producto.bar_only && !item.producto.es_plato_compuesto,
+      ),
+    [productosNuevoPedido],
+  );
+
+  const productosConNotasFactura = useMemo(
+    () =>
+      productosSeleccionados.filter(
+        (item) => !item.producto.bar_only && !item.producto.es_plato_compuesto,
+      ),
+    [productosSeleccionados],
+  );
+
+  const productosConFlavorsNuevoPedido = useMemo(
+    () =>
+      productosNuevoPedido.filter(
+        (item) =>
+          item.producto.admite_flavors &&
+          (item.producto.productos_flavors?.length ?? 0) > 0,
+      ),
+    [productosNuevoPedido],
+  );
+
+  const productosConFlavorsFactura = useMemo(
+    () =>
+      productosSeleccionados.filter(
+        (item) =>
+          item.producto.admite_flavors &&
+          (item.producto.productos_flavors?.length ?? 0) > 0,
+      ),
+    [productosSeleccionados],
+  );
+
+  const necesitaComplementosNuevoPedido =
+    productosCompuestosNuevoPedido.length > 0;
+
+  const necesitaNotasNuevoPedido = productosConNotasNuevoPedido.length > 0;
+
+  const necesitaFlavorsNuevoPedido = productosConFlavorsNuevoPedido.length > 0;
+
+  const necesitaComplementosFactura = productosCompuestosFactura.length > 0;
+
+  const necesitaNotasFactura = productosConNotasFactura.length > 0;
+
+  const necesitaFlavorsFactura = productosConFlavorsFactura.length > 0;
+
+  const complementosFacturaCompletos = useMemo(
+    () =>
+      productosCompuestosFactura.every((item) => {
+        const requeridos = Number(item.producto.cant_complementos ?? 0);
+        const seleccionados = complementosFactura[item.producto.id] ?? [];
+        return seleccionados.length === requeridos;
+      }),
+    [complementosFactura, productosCompuestosFactura],
+  );
+
+  const flavorsFacturaCompletos = useMemo(
+    () =>
+      productosConFlavorsFactura.every((item) =>
+        Boolean(flavorsFactura[item.producto.id]),
+      ),
+    [flavorsFactura, productosConFlavorsFactura],
+  );
+
+  const complementosNuevoPedidoCompletos = useMemo(
+    () =>
+      productosCompuestosNuevoPedido.every((item) => {
+        const requeridos = Number(item.producto.cant_complementos ?? 0);
+        const seleccionados = complementosNuevoPedido[item.producto.id] ?? [];
+        return seleccionados.length === requeridos;
+      }),
+    [complementosNuevoPedido, productosCompuestosNuevoPedido],
+  );
+
+  const flavorsNuevoPedidoCompletos = useMemo(
+    () =>
+      productosConFlavorsNuevoPedido.every((item) =>
+        Boolean(flavorsNuevoPedido[item.producto.id]),
+      ),
+    [flavorsNuevoPedido, productosConFlavorsNuevoPedido],
+  );
+
   const totalAAgregar = useMemo(
     () =>
       productosSeleccionados.reduce(
@@ -171,8 +354,7 @@ export default function DinDashboard({
   );
 
   const cantidadAAgregar = useMemo(
-    () =>
-      productosSeleccionados.reduce((acc, item) => acc + item.cantidad, 0),
+    () => productosSeleccionados.reduce((acc, item) => acc + item.cantidad, 0),
     [productosSeleccionados],
   );
 
@@ -195,15 +377,13 @@ export default function DinDashboard({
     [mesaNuevoPedidoId, mesas],
   );
 
-  const totalFacturaProcesada = useMemo(
-    () => Number(facturaSeleccionada?.total ?? 0) + totalAAgregar,
-    [facturaSeleccionada?.total, totalAAgregar],
-  );
-
   const abrirModal = (factura: FacturaActiva) => {
     setFacturaSeleccionada(factura);
     setSeleccionados({});
-    setResumenAbierto(false);
+    setComplementosFactura({});
+    setNotasFactura({});
+    setFlavorsFactura({});
+    setFacturaPaso("productos");
     setErrorModal(null);
     setModalAbierto(true);
     if (!categoriaSeleccionadaId && menu[0]?.id) {
@@ -211,16 +391,29 @@ export default function DinDashboard({
     }
   };
 
+  const cerrarModalFactura = () => {
+    setModalAbierto(false);
+    setFacturaPaso("productos");
+  };
+
   const abrirNuevoPedido = () => {
     setSeleccionadosNuevoPedido({});
+    setComplementosNuevoPedido({});
+    setNotasNuevoPedido({});
+    setFlavorsNuevoPedido({});
     setMesaNuevoPedidoId("");
-    setResumenNuevoPedidoAbierto(false);
+    setNuevoPedidoPaso("productos");
     setErrorNuevoPedido(null);
     setSuccessMessage(null);
     setNuevoPedidoAbierto(true);
     if (!categoriaNuevoPedidoId && menu[0]?.id) {
       setCategoriaNuevoPedidoId(menu[0].id);
     }
+  };
+
+  const cerrarNuevoPedido = () => {
+    setNuevoPedidoAbierto(false);
+    setNuevoPedidoPaso("productos");
   };
 
   const cajaEstaAbierta = async () => {
@@ -284,29 +477,302 @@ export default function DinDashboard({
     });
   };
 
+  const getSiguientePaso = ({
+    pasoActual,
+    necesitaNotas,
+    necesitaComplementos,
+    necesitaFlavors,
+  }: {
+    pasoActual: PedidoWizardPaso;
+    necesitaNotas: boolean;
+    necesitaComplementos: boolean;
+    necesitaFlavors: boolean;
+  }): PedidoWizardPaso | null => {
+    if (pasoActual === "productos") {
+      if (necesitaNotas) return "notas";
+      if (necesitaComplementos) return "complementos";
+      if (necesitaFlavors) return "flavors";
+      return "resumen";
+    }
+
+    if (pasoActual === "notas") {
+      if (necesitaComplementos) return "complementos";
+      if (necesitaFlavors) return "flavors";
+      return "resumen";
+    }
+
+    if (pasoActual === "complementos") {
+      if (necesitaFlavors) return "flavors";
+      return "resumen";
+    }
+
+    if (pasoActual === "flavors") return "resumen";
+
+    return null;
+  };
+
+  const getPasoAnterior = ({
+    pasoActual,
+    necesitaNotas,
+    necesitaComplementos,
+    necesitaFlavors,
+  }: {
+    pasoActual: PedidoWizardPaso;
+    necesitaNotas: boolean;
+    necesitaComplementos: boolean;
+    necesitaFlavors: boolean;
+  }): PedidoWizardPaso | null => {
+    if (pasoActual === "resumen") {
+      if (necesitaFlavors) return "flavors";
+      if (necesitaComplementos) return "complementos";
+      if (necesitaNotas) return "notas";
+      return "productos";
+    }
+
+    if (pasoActual === "flavors") {
+      if (necesitaComplementos) return "complementos";
+      if (necesitaNotas) return "notas";
+      return "productos";
+    }
+
+    if (pasoActual === "complementos") {
+      if (necesitaNotas) return "notas";
+      return "productos";
+    }
+
+    if (pasoActual === "notas") return "productos";
+
+    return null;
+  };
+
+  const avanzarFactura = () => {
+    setErrorModal(null);
+    const siguientePaso = getSiguientePaso({
+      pasoActual: facturaPaso,
+      necesitaNotas: necesitaNotasFactura,
+      necesitaComplementos: necesitaComplementosFactura,
+      necesitaFlavors: necesitaFlavorsFactura,
+    });
+
+    if (siguientePaso) {
+      setFacturaPaso(siguientePaso);
+    }
+  };
+
+  const retrocederFactura = () => {
+    setErrorModal(null);
+    const pasoAnterior = getPasoAnterior({
+      pasoActual: facturaPaso,
+      necesitaNotas: necesitaNotasFactura,
+      necesitaComplementos: necesitaComplementosFactura,
+      necesitaFlavors: necesitaFlavorsFactura,
+    });
+
+    if (pasoAnterior) {
+      setFacturaPaso(pasoAnterior);
+    }
+  };
+
+  const avanzarNuevoPedido = () => {
+    setErrorNuevoPedido(null);
+    const siguientePaso = getSiguientePaso({
+      pasoActual: nuevoPedidoPaso,
+      necesitaNotas: necesitaNotasNuevoPedido,
+      necesitaComplementos: necesitaComplementosNuevoPedido,
+      necesitaFlavors: necesitaFlavorsNuevoPedido,
+    });
+
+    if (siguientePaso) {
+      setNuevoPedidoPaso(siguientePaso);
+    }
+  };
+
+  const retrocederNuevoPedido = () => {
+    setErrorNuevoPedido(null);
+    const pasoAnterior = getPasoAnterior({
+      pasoActual: nuevoPedidoPaso,
+      necesitaNotas: necesitaNotasNuevoPedido,
+      necesitaComplementos: necesitaComplementosNuevoPedido,
+      necesitaFlavors: necesitaFlavorsNuevoPedido,
+    });
+
+    if (pasoAnterior) {
+      setNuevoPedidoPaso(pasoAnterior);
+    }
+  };
+
+  const toggleComplementoNuevoPedido = (
+    productoId: string,
+    complementoId: string,
+    maxComplementos: number,
+  ) => {
+    setComplementosNuevoPedido((current) => {
+      const actuales = current[productoId] ?? [];
+      const estaSeleccionado = actuales.includes(complementoId);
+      const siguientes = estaSeleccionado
+        ? actuales.filter((id) => id !== complementoId)
+        : actuales.length < maxComplementos
+          ? [...actuales, complementoId]
+          : actuales;
+
+      return {
+        ...current,
+        [productoId]: siguientes,
+      };
+    });
+  };
+
+  const toggleComplementoFactura = (
+    productoId: string,
+    complementoId: string,
+    maxComplementos: number,
+  ) => {
+    setComplementosFactura((current) => {
+      const actuales = current[productoId] ?? [];
+      const estaSeleccionado = actuales.includes(complementoId);
+      const siguientes = estaSeleccionado
+        ? actuales.filter((id) => id !== complementoId)
+        : actuales.length < maxComplementos
+          ? [...actuales, complementoId]
+          : actuales;
+
+      return {
+        ...current,
+        [productoId]: siguientes,
+      };
+    });
+  };
+
+  const seleccionarFlavorNuevoPedido = (
+    productoId: string,
+    flavorId: string,
+  ) => {
+    setFlavorsNuevoPedido((current) => ({
+      ...current,
+      [productoId]: flavorId,
+    }));
+  };
+
+  const seleccionarFlavorFactura = (productoId: string, flavorId: string) => {
+    setFlavorsFactura((current) => ({
+      ...current,
+      [productoId]: flavorId,
+    }));
+  };
+
+  const escribirNotaNuevoPedido = (productoId: string, nota: string) => {
+    setNotasNuevoPedido((current) => ({
+      ...current,
+      [productoId]: nota,
+    }));
+  };
+
+  const escribirNotaFactura = (productoId: string, nota: string) => {
+    setNotasFactura((current) => ({
+      ...current,
+      [productoId]: nota,
+    }));
+  };
+
+  const getNotasProducto = (
+    producto: ProductoMenuDin,
+    complementosSeleccionados: ComplementosSeleccionados,
+    flavorsSeleccionados: FlavorsSeleccionados,
+    notasSeleccionadas: NotasSeleccionadas,
+  ) => {
+    const notaManual = notasSeleccionadas[producto.id]?.trim();
+    const complementos = (complementosSeleccionados[producto.id] ?? [])
+      .map((complementoId) =>
+        listaComplementos.find(
+          (complemento) => complemento.id === complementoId,
+        ),
+      )
+      .filter(Boolean)
+      .map((complemento) => complemento?.nombre);
+
+    const flavor = producto.productos_flavors?.find(
+      (item) => item.id === flavorsSeleccionados[producto.id],
+    );
+
+    return [
+      notaManual ? `Nota: ${notaManual}` : null,
+      complementos.length > 0
+        ? `Acompanamientos: ${complementos.join(", ")}`
+        : null,
+      flavor ? `Sabor: ${flavor.nombre}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  };
+
+  const getNotasNuevoPedido = (producto: ProductoMenuDin) =>
+    getNotasProducto(
+      producto,
+      complementosNuevoPedido,
+      flavorsNuevoPedido,
+      notasNuevoPedido,
+    );
+
+  const getNotasFactura = (producto: ProductoMenuDin) =>
+    getNotasProducto(
+      producto,
+      complementosFactura,
+      flavorsFactura,
+      notasFactura,
+    );
+
   const insertarProductos = async () => {
     if (!facturaSeleccionada || productosSeleccionados.length === 0) return;
 
     setGuardando(true);
     setErrorModal(null);
 
-    const items = productosSeleccionados.map((item) => ({
+    const barItems = productosFacturaBar.map((item) => ({
       producto_id: item.producto.id,
       cantidad: item.cantidad,
+      notas: getNotasFactura(item.producto) || null,
+    }));
+    const cocinaItems = productosFacturaCocina.map((item) => ({
+      producto_id: item.producto.id,
+      cantidad: item.cantidad,
+      notas: getNotasFactura(item.producto) || null,
     }));
 
     try {
-      const { error } = await supabase.rpc("agregar_productos_factura_mesero", {
-        p_factura_id: facturaSeleccionada.id,
-        p_items: items,
-      });
+      if (barItems.length > 0) {
+        const { error } = await supabase.rpc(
+          "agregar_productos_factura_mesero",
+          {
+            p_factura_id: facturaSeleccionada.id,
+            p_items: barItems,
+          },
+        );
 
-      if (error) throw error;
+        if (error) throw error;
+      }
+
+      if (cocinaItems.length > 0) {
+        const { error } = await supabase.rpc("agregar_pedido_mesero", {
+          p_mesa_id: facturaSeleccionada.mesa_id,
+          p_items: cocinaItems,
+          p_es_adicional: true,
+        });
+
+        if (error) throw error;
+      }
 
       setSeleccionados({});
-      setResumenAbierto(false);
+      setComplementosFactura({});
+      setNotasFactura({});
+      setFlavorsFactura({});
+      setFacturaPaso("productos");
       setModalAbierto(false);
       setFacturaSeleccionada(null);
+      setSuccessMessage(
+        cocinaItems.length > 0
+          ? "Productos enviados como pedido adicional."
+          : "Productos agregados a la factura.",
+      );
       router.refresh();
     } catch (error) {
       const message = getErrorField(error, "message");
@@ -321,7 +787,8 @@ export default function DinDashboard({
         details,
         hint,
         facturaId: facturaSeleccionada.id,
-        items,
+        barItems,
+        cocinaItems,
       });
 
       setErrorModal(
@@ -354,28 +821,62 @@ export default function DinDashboard({
         return;
       }
 
+      const pedidoItems = productosNuevoPedido.map((item) => ({
+        producto_id: item.producto.id,
+        cantidad: item.cantidad,
+        notas: getNotasNuevoPedido(item.producto) || null,
+      }));
+
       const { error } = await supabase.rpc("agregar_pedido_mesero", {
         p_mesa_id: mesaNuevoPedidoId,
-        p_items: productosNuevoPedido.map((item) => ({
-          producto_id: item.producto.id,
-          cantidad: item.cantidad,
-        })),
+        p_items: pedidoItems,
+        p_es_adicional: false,
       });
 
       if (error) throw error;
 
       setSeleccionadosNuevoPedido({});
+      setComplementosNuevoPedido({});
+      setNotasNuevoPedido({});
+      setFlavorsNuevoPedido({});
       setMesaNuevoPedidoId("");
-      setResumenNuevoPedidoAbierto(false);
+      setNuevoPedidoPaso("productos");
       setNuevoPedidoAbierto(false);
       setSuccessMessage("Pedido agregado.");
       router.refresh();
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No se pudo agregar el pedido.";
-      setErrorNuevoPedido(message);
+      const message = getErrorField(error, "message");
+      const details = getErrorField(error, "details");
+      const hint = getErrorField(error, "hint");
+      const code = getErrorField(error, "code");
+
+      console.error("EXCEPTION agregar_pedido_mesero:", {
+        error,
+        code,
+        message,
+        details,
+        hint,
+        mesaNuevoPedidoId,
+        productosNuevoPedido: productosNuevoPedido.map((item) => ({
+          producto_id: item.producto.id,
+          nombre: item.producto.nombre,
+          cantidad: item.cantidad,
+          bar_only: item.producto.bar_only,
+          es_plato_compuesto: item.producto.es_plato_compuesto,
+          notas: getNotasNuevoPedido(item.producto) || null,
+        })),
+      });
+
+      setErrorNuevoPedido(
+        [
+          message ?? "No se pudo agregar el pedido.",
+          details,
+          hint,
+          code ? `Codigo: ${code}` : null,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+      );
     } finally {
       setGuardandoNuevoPedido(false);
     }
@@ -431,7 +932,9 @@ export default function DinDashboard({
             <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">
               Activo
             </p>
-            <p className="mt-1 text-lg font-black">{formatCurrency(totalActivo)}</p>
+            <p className="mt-1 text-lg font-black">
+              {formatCurrency(totalActivo)}
+            </p>
           </div>
         </div>
 
@@ -566,255 +1069,485 @@ export default function DinDashboard({
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setResumenAbierto(false);
-                    setModalAbierto(false);
-                  }}
+                  onClick={cerrarModalFactura}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-neutral-300"
                   aria-label="Cerrar modal"
                 >
                   <XMarkIcon className="h-5 w-5" />
                 </button>
               </div>
+
+              <div className="mt-3 grid grid-cols-5 gap-2">
+                {[
+                  ["productos", "Productos"],
+                  ["notas", "Notas"],
+                  ["complementos", "Complementos"],
+                  ["flavors", "Sabores"],
+                  ["resumen", "Resumen"],
+                ].map(([paso, label]) => {
+                  const habilitado =
+                    paso === "productos" ||
+                    paso === "resumen" ||
+                    (paso === "notas" && necesitaNotasFactura) ||
+                    (paso === "complementos" && necesitaComplementosFactura) ||
+                    (paso === "flavors" && necesitaFlavorsFactura);
+
+                  return (
+                    <div
+                      key={paso}
+                      className={`h-1.5 rounded-full ${
+                        facturaPaso === paso
+                          ? "bg-[#E85D26]"
+                          : habilitado
+                            ? "bg-white/20"
+                            : "bg-white/[0.06]"
+                      }`}
+                      title={label}
+                    />
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)_auto]">
-              <aside className="min-w-0 border-b border-white/[0.08] p-3 md:row-span-2 md:border-b-0 md:border-r">
-                <div className="flex max-w-full gap-2 overflow-x-auto md:block md:space-y-2 md:overflow-visible">
-                  {menu.map((categoria) => (
-                    <button
-                      key={categoria.id}
-                      type="button"
-                      onClick={() => setCategoriaSeleccionadaId(categoria.id)}
-                      className={`h-11 shrink-0 rounded-xl px-4 text-left text-sm font-bold transition-colors md:w-full ${
-                        categoriaSeleccionada?.id === categoria.id
-                          ? "bg-white text-neutral-950"
-                          : "border border-white/[0.08] text-neutral-300"
-                      }`}
-                    >
-                      {categoria.nombre}
-                    </button>
-                  ))}
-                </div>
-              </aside>
+            {facturaPaso === "productos" && (
+              <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)_auto]">
+                <aside className="min-w-0 border-b border-white/[0.08] p-3 md:row-span-2 md:border-b-0 md:border-r">
+                  <div className="flex max-w-full gap-2 overflow-x-auto md:block md:space-y-2 md:overflow-visible">
+                    {menu.map((categoria) => (
+                      <button
+                        key={categoria.id}
+                        type="button"
+                        onClick={() => setCategoriaSeleccionadaId(categoria.id)}
+                        className={`h-11 shrink-0 rounded-xl px-4 text-left text-sm font-bold transition-colors md:w-full ${
+                          categoriaSeleccionada?.id === categoria.id
+                            ? "bg-white text-neutral-950"
+                            : "border border-white/[0.08] text-neutral-300"
+                        }`}
+                      >
+                        {categoria.nombre}
+                      </button>
+                    ))}
+                  </div>
+                </aside>
 
-              <section className="min-h-0 min-w-0 overflow-y-auto p-3 md:p-4">
-                {categoriaSeleccionada ? (
-                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    {categoriaSeleccionada.items.map((producto) => {
-                      const cantidad = seleccionados[producto.id]?.cantidad ?? 0;
+                <section className="min-h-0 min-w-0 overflow-y-auto p-3 md:p-4">
+                  {categoriaSeleccionada ? (
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {categoriaSeleccionada.items.map((producto) => {
+                        const cantidad =
+                          seleccionados[producto.id]?.cantidad ?? 0;
 
-                      return (
-                        <article
-                          key={producto.id}
-                          onClick={() => cambiarCantidad(producto, 1)}
-                          className={`rounded-xl border p-3 transition-colors active:scale-[0.99] ${
-                            cantidad > 0
-                              ? "border-orange-400/50 bg-orange-500/10"
-                              : "border-white/[0.08] bg-white/[0.03]"
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <h3 className="line-clamp-2 text-sm font-black">
-                              {producto.nombre}
-                            </h3>
-                            {producto.descripcion && (
-                              <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">
-                                {producto.descripcion}
-                              </p>
-                            )}
-                            <div className="mt-3 flex items-center justify-between gap-3">
-                              <p className="text-base font-black text-orange-400">
-                                {formatCurrency(Number(producto.precio ?? 0))}
-                              </p>
-                              <div className="grid grid-cols-[36px_34px_36px] items-center rounded-xl border border-white/[0.08] bg-black/20">
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    cambiarCantidad(producto, -1);
-                                  }}
-                                  className="flex h-9 items-center justify-center text-neutral-300 disabled:text-neutral-700"
-                                  disabled={cantidad === 0}
-                                  aria-label={`Restar ${producto.nombre}`}
+                        return (
+                          <article
+                            key={producto.id}
+                            onClick={() => cambiarCantidad(producto, 1)}
+                            className={`rounded-xl border p-3 transition-colors active:scale-[0.99] ${
+                              cantidad > 0
+                                ? "border-orange-400/50 bg-orange-500/10"
+                                : "border-white/[0.08] bg-white/[0.03]"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <h3 className="line-clamp-2 text-sm font-black">
+                                  {producto.nombre}
+                                </h3>
+                                <span
+                                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${
+                                    producto.bar_only
+                                      ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-200"
+                                      : "border-orange-300/40 bg-orange-500/10 text-orange-200"
+                                  }`}
                                 >
-                                  <MinusIcon className="h-4 w-4" />
-                                </button>
-                                <span className="text-center text-sm font-black">
-                                  {cantidad}
+                                  {producto.bar_only ? "Bar" : "Cocina"}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    cambiarCantidad(producto, 1);
-                                  }}
-                                  className="flex h-9 items-center justify-center text-orange-300"
-                                  aria-label={`Agregar ${producto.nombre}`}
-                                >
-                                  <PlusIcon className="h-4 w-4" />
-                                </button>
+                              </div>
+                              {producto.descripcion && (
+                                <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">
+                                  {producto.descripcion}
+                                </p>
+                              )}
+                              <div className="mt-3 flex items-center justify-between gap-3">
+                                <p className="text-base font-black text-orange-400">
+                                  {formatCurrency(Number(producto.precio ?? 0))}
+                                </p>
+                                <div className="grid grid-cols-[36px_34px_36px] items-center rounded-xl border border-white/[0.08] bg-black/20">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      cambiarCantidad(producto, -1);
+                                    }}
+                                    className="flex h-9 items-center justify-center text-neutral-300 disabled:text-neutral-700"
+                                    disabled={cantidad === 0}
+                                    aria-label={`Restar ${producto.nombre}`}
+                                  >
+                                    <MinusIcon className="h-4 w-4" />
+                                  </button>
+                                  <span className="text-center text-sm font-black">
+                                    {cantidad}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      cambiarCantidad(producto, 1);
+                                    }}
+                                    className="flex h-9 items-center justify-center text-orange-300"
+                                    aria-label={`Agregar ${producto.nombre}`}
+                                  >
+                                    <PlusIcon className="h-4 w-4" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/[0.12] p-8 text-center text-sm text-neutral-500">
-                    No hay productos disponibles para este restaurante.
-                  </div>
-                )}
-              </section>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/[0.12] p-8 text-center text-sm text-neutral-500">
+                      No hay productos disponibles para este restaurante.
+                    </div>
+                  )}
+                </section>
 
-              <div className="min-w-0 shrink-0 border-t border-white/[0.08] bg-[#111] p-3 md:col-start-2 md:p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">
-                      Seleccionados
-                    </p>
-                    <p className="mt-1 truncate text-sm font-black text-yellow-300">
-                      {cantidadAAgregar} items nuevos · {formatCurrency(totalAAgregar)}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setResumenAbierto(true)}
-                    disabled={productosSeleccionados.length === 0}
-                    className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[#E85D26] px-5 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
-                  >
-                    Ver resumen
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {resumenAbierto && facturaSeleccionada && (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6">
-          <div className="flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-white/[0.08] bg-[#141414] shadow-2xl shadow-black sm:mx-auto sm:max-w-md sm:rounded-2xl sm:border">
-            <div className="shrink-0 border-b border-white/[0.08] px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-yellow-300">
-                    Resumen
-                  </p>
-                  <h2 className="truncate text-lg font-black">
-                    Revisar productos
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setResumenAbierto(false)}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-neutral-300"
-                  aria-label="Cerrar resumen"
-                >
-                  <XMarkIcon className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-neutral-400">Factura actual</span>
-                  <span className="font-bold text-neutral-100">
-                    {formatCurrency(Number(facturaSeleccionada.total ?? 0))}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <span className="text-neutral-400">Items nuevos</span>
-                  <span className="font-black text-yellow-300">
-                    {cantidadAAgregar}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-              {productosSeleccionados.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-white/[0.1] px-4 py-8 text-center text-sm text-neutral-500">
-                  Selecciona productos y cantidades.
-                </p>
-              ) : (
-                productosSeleccionados.map((item) => (
-                  <article
-                    key={item.producto.id}
-                    className="rounded-xl border border-yellow-300/20 bg-yellow-300/10 p-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="line-clamp-2 text-sm font-black text-yellow-300">
-                          {item.producto.nombre}
-                        </h3>
-                        <p className="mt-1 text-xs font-bold text-neutral-400">
-                          {formatCurrency(item.producto.precio)} c/u
-                        </p>
-                      </div>
-                      <p className="shrink-0 text-sm font-black text-yellow-300">
-                        {formatCurrency(item.producto.precio * item.cantidad)}
+                <div className="min-w-0 shrink-0 border-t border-white/[0.08] bg-[#111] p-3 md:col-start-2 md:p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">
+                        Seleccionados
+                      </p>
+                      <p className="mt-1 truncate text-sm font-black text-yellow-300">
+                        {cantidadAAgregar} items nuevos ·{" "}
+                        {formatCurrency(totalAAgregar)}
                       </p>
                     </div>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-                        Cantidad
-                      </span>
-                      <div className="grid grid-cols-[42px_42px_42px] items-center rounded-xl border border-white/[0.08] bg-black/20">
-                        <button
-                          type="button"
-                          onClick={() => cambiarCantidad(item.producto, -1)}
-                          className="flex h-10 items-center justify-center text-neutral-300"
-                          aria-label={`Restar ${item.producto.nombre}`}
-                        >
-                          <MinusIcon className="h-4 w-4" />
-                        </button>
-                        <span className="text-center text-base font-black text-neutral-100">
-                          {item.cantidad}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => cambiarCantidad(item.producto, 1)}
-                          className="flex h-10 items-center justify-center text-yellow-300"
-                          aria-label={`Agregar ${item.producto.nombre}`}
-                        >
-                          <PlusIcon className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-
-            <div className="shrink-0 border-t border-white/[0.08] bg-[#111] px-4 py-4">
-              {errorModal && (
-                <p className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
-                  {errorModal}
-                </p>
-              )}
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-bold text-neutral-400">A agregar</span>
-                  <span className="text-lg font-black text-yellow-300">
-                    {formatCurrency(totalAAgregar)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-bold text-neutral-400">Total factura</span>
-                  <span className="text-xl font-black text-neutral-100">
-                    {formatCurrency(totalFacturaProcesada)}
-                  </span>
+                    <button
+                      type="button"
+                      onClick={avanzarFactura}
+                      disabled={productosSeleccionados.length === 0}
+                      className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[#E85D26] px-5 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+                    >
+                      Siguiente
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={insertarProductos}
-                disabled={guardando || productosSeleccionados.length === 0}
-                className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-[#E85D26] px-4 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
-              >
-                {guardando ? "PROCESANDO..." : "CONFIRMAR"}
-              </button>
-            </div>
+            )}
+
+            {facturaPaso !== "productos" && (
+              <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto]">
+                <section className="min-h-0 overflow-y-auto p-4">
+                  {facturaPaso === "notas" && (
+                    <div className="space-y-4">
+                      {productosConNotasFactura.map((item) => (
+                        <article
+                          key={item.producto.id}
+                          className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h3 className="text-base font-black text-neutral-100">
+                                {item.producto.nombre}
+                              </h3>
+                              <p className="mt-1 text-xs font-bold text-neutral-500">
+                                Agrega una nota opcional para cocina
+                              </p>
+                            </div>
+                            <span className="shrink-0 rounded-full border border-orange-300/40 bg-orange-500/10 px-3 py-1 text-[10px] font-black uppercase text-orange-200">
+                              Cocina
+                            </span>
+                          </div>
+                          <textarea
+                            value={notasFactura[item.producto.id] ?? ""}
+                            onChange={(event) =>
+                              escribirNotaFactura(
+                                item.producto.id,
+                                event.target.value,
+                              )
+                            }
+                            rows={3}
+                            maxLength={180}
+                            placeholder="Ej. sin cebolla, poca salsa, termino medio"
+                            className="mt-4 w-full resize-none rounded-xl border border-white/[0.08] bg-black/25 px-3 py-3 text-sm font-bold text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-orange-400/50"
+                          />
+                        </article>
+                      ))}
+                    </div>
+                  )}
+
+                  {facturaPaso === "complementos" && (
+                    <div className="space-y-4">
+                      {productosCompuestosFactura.map((item) => {
+                        const requeridos = Number(
+                          item.producto.cant_complementos ?? 0,
+                        );
+                        const seleccionados =
+                          complementosFactura[item.producto.id] ?? [];
+
+                        return (
+                          <article
+                            key={item.producto.id}
+                            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h3 className="text-base font-black text-neutral-100">
+                                  {item.producto.nombre}
+                                </h3>
+                                <p className="mt-1 text-xs font-bold text-neutral-500">
+                                  Selecciona {requeridos} complementos
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-orange-400/30 px-3 py-1 text-xs font-black text-orange-300">
+                                {seleccionados.length}/{requeridos}
+                              </span>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {listaComplementos.map((complemento) => {
+                                const activo = seleccionados.includes(
+                                  complemento.id,
+                                );
+                                const bloqueado =
+                                  !activo && seleccionados.length >= requeridos;
+
+                                return (
+                                  <button
+                                    key={complemento.id}
+                                    type="button"
+                                    onClick={() =>
+                                      toggleComplementoFactura(
+                                        item.producto.id,
+                                        complemento.id,
+                                        requeridos,
+                                      )
+                                    }
+                                    className={`min-h-12 rounded-xl border px-3 py-2 text-left text-sm font-bold transition-colors ${
+                                      activo
+                                        ? "border-orange-400/60 bg-orange-500/15 text-orange-200"
+                                        : bloqueado
+                                          ? "border-white/[0.05] bg-white/[0.02] text-neutral-600"
+                                          : "border-white/[0.08] bg-white/[0.04] text-neutral-300"
+                                    }`}
+                                  >
+                                    {complemento.nombre}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {facturaPaso === "flavors" && (
+                    <div className="space-y-4">
+                      {productosConFlavorsFactura.map((item) => {
+                        const selectedFlavorId =
+                          flavorsFactura[item.producto.id] ?? "";
+
+                        return (
+                          <article
+                            key={item.producto.id}
+                            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
+                          >
+                            <h3 className="text-base font-black text-neutral-100">
+                              {item.producto.nombre}
+                            </h3>
+                            <p className="mt-1 text-xs font-bold text-neutral-500">
+                              Elige una preparacion
+                            </p>
+
+                            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {item.producto.productos_flavors
+                                ?.slice()
+                                .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+                                .map((flavor) => {
+                                  const activo = selectedFlavorId === flavor.id;
+
+                                  return (
+                                    <button
+                                      key={flavor.id}
+                                      type="button"
+                                      onClick={() =>
+                                        seleccionarFlavorFactura(
+                                          item.producto.id,
+                                          flavor.id,
+                                        )
+                                      }
+                                      className={`min-h-12 rounded-xl border px-3 py-2 text-left text-sm font-bold transition-colors ${
+                                        activo
+                                          ? "border-yellow-300/60 bg-yellow-300/15 text-yellow-200"
+                                          : "border-white/[0.08] bg-white/[0.04] text-neutral-300"
+                                      }`}
+                                    >
+                                      {flavor.nombre}
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {facturaPaso === "resumen" && (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-neutral-400">
+                            Factura actual
+                          </span>
+                          <span className="font-bold text-neutral-100">
+                            {formatCurrency(
+                              Number(facturaSeleccionada.total ?? 0),
+                            )}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <span className="text-neutral-400">
+                            Directo a factura
+                          </span>
+                          <span className="font-black text-cyan-200">
+                            {productosFacturaBar.length} productos bar
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <span className="text-neutral-400">
+                            Comanda nueva
+                          </span>
+                          <span className="font-black text-orange-200">
+                            {productosFacturaCocina.length} productos cocina
+                          </span>
+                        </div>
+                      </div>
+
+                      {productosSeleccionados.map((item) => {
+                        const notas = getNotasFactura(item.producto);
+
+                        return (
+                          <article
+                            key={item.producto.id}
+                            className="rounded-xl border border-yellow-300/20 bg-yellow-300/10 p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="line-clamp-2 text-sm font-black text-yellow-300">
+                                    {item.producto.nombre}
+                                  </h3>
+                                  <span
+                                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${
+                                      item.producto.bar_only
+                                        ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-200"
+                                        : "border-orange-300/40 bg-orange-500/10 text-orange-200"
+                                    }`}
+                                  >
+                                    {item.producto.bar_only
+                                      ? "Factura"
+                                      : "Comanda"}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-xs font-bold text-neutral-400">
+                                  {item.cantidad} x{" "}
+                                  {formatCurrency(item.producto.precio)} c/u
+                                </p>
+                                {notas && (
+                                  <p className="mt-2 text-xs font-bold text-orange-200">
+                                    {notas}
+                                  </p>
+                                )}
+                              </div>
+                              <p className="shrink-0 text-sm font-black text-yellow-300">
+                                {formatCurrency(
+                                  item.producto.precio * item.cantidad,
+                                )}
+                              </p>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                <div className="min-w-0 shrink-0 border-t border-white/[0.08] bg-[#111] p-3 md:p-4">
+                  {errorModal && (
+                    <p className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
+                      {errorModal}
+                    </p>
+                  )}
+                  {facturaPaso === "resumen" && (
+                    <div className="mb-3 space-y-2 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold text-neutral-400">
+                          A agregar
+                        </span>
+                        <span className="text-lg font-black text-yellow-300">
+                          {formatCurrency(totalAAgregar)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold text-neutral-400">
+                          Total factura
+                        </span>
+                        <span className="text-xl font-black text-neutral-100">
+                          {formatCurrency(
+                            Number(facturaSeleccionada.total ?? 0) +
+                              productosFacturaBar.reduce(
+                                (acc, item) =>
+                                  acc +
+                                  Number(item.producto.precio ?? 0) *
+                                    item.cantidad,
+                                0,
+                              ),
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={retrocederFactura}
+                      className="flex h-12 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] px-5 text-center text-sm font-black uppercase tracking-wide text-neutral-300 transition-colors active:bg-white/[0.06]"
+                    >
+                      Atras
+                    </button>
+                    {facturaPaso === "resumen" ? (
+                      <button
+                        type="button"
+                        onClick={insertarProductos}
+                        disabled={
+                          guardando || productosSeleccionados.length === 0
+                        }
+                        className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[#E85D26] px-5 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+                      >
+                        {guardando ? "PROCESANDO..." : "CONFIRMAR"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={avanzarFactura}
+                        disabled={
+                          (facturaPaso === "complementos" &&
+                            !complementosFacturaCompletos) ||
+                          (facturaPaso === "flavors" &&
+                            !flavorsFacturaCompletos)
+                        }
+                        className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[#E85D26] px-5 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+                      >
+                        Siguiente
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -832,10 +1565,7 @@ export default function DinDashboard({
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setResumenNuevoPedidoAbierto(false);
-                    setNuevoPedidoAbierto(false);
-                  }}
+                  onClick={cerrarNuevoPedido}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-neutral-300"
                   aria-label="Cerrar nuevo pedido"
                 >
@@ -844,6 +1574,37 @@ export default function DinDashboard({
               </div>
 
               <div className="mt-3">
+                <div className="mb-3 grid grid-cols-5 gap-2">
+                  {[
+                    ["productos", "Productos"],
+                    ["notas", "Notas"],
+                    ["complementos", "Complementos"],
+                    ["flavors", "Sabores"],
+                    ["resumen", "Resumen"],
+                  ].map(([paso, label]) => {
+                    const habilitado =
+                      paso === "productos" ||
+                      paso === "resumen" ||
+                      (paso === "notas" && necesitaNotasNuevoPedido) ||
+                      (paso === "complementos" &&
+                        necesitaComplementosNuevoPedido) ||
+                      (paso === "flavors" && necesitaFlavorsNuevoPedido);
+
+                    return (
+                      <div
+                        key={paso}
+                        className={`h-1.5 rounded-full ${
+                          nuevoPedidoPaso === paso
+                            ? "bg-[#E85D26]"
+                            : habilitado
+                              ? "bg-white/20"
+                              : "bg-white/[0.06]"
+                        }`}
+                        title={label}
+                      />
+                    );
+                  })}
+                </div>
                 <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-neutral-500">
                   Mesa
                 </label>
@@ -863,236 +1624,420 @@ export default function DinDashboard({
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)_auto]">
-              <aside className="min-w-0 border-b border-white/[0.08] p-3 md:row-span-2 md:border-b-0 md:border-r">
-                <div className="flex max-w-full gap-2 overflow-x-auto md:block md:space-y-2 md:overflow-visible">
-                  {menu.map((categoria) => (
-                    <button
-                      key={categoria.id}
-                      type="button"
-                      onClick={() => setCategoriaNuevoPedidoId(categoria.id)}
-                      className={`h-11 shrink-0 rounded-xl px-4 text-left text-sm font-bold transition-colors md:w-full ${
-                        categoriaNuevoPedido?.id === categoria.id
-                          ? "bg-white text-neutral-950"
-                          : "border border-white/[0.08] text-neutral-300"
-                      }`}
-                    >
-                      {categoria.nombre}
-                    </button>
-                  ))}
-                </div>
-              </aside>
+            {nuevoPedidoPaso === "productos" && (
+              <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)_auto]">
+                <aside className="min-w-0 border-b border-white/[0.08] p-3 md:row-span-2 md:border-b-0 md:border-r">
+                  <div className="flex max-w-full gap-2 overflow-x-auto md:block md:space-y-2 md:overflow-visible">
+                    {menu.map((categoria) => (
+                      <button
+                        key={categoria.id}
+                        type="button"
+                        onClick={() => setCategoriaNuevoPedidoId(categoria.id)}
+                        className={`h-11 shrink-0 rounded-xl px-4 text-left text-sm font-bold transition-colors md:w-full ${
+                          categoriaNuevoPedido?.id === categoria.id
+                            ? "bg-white text-neutral-950"
+                            : "border border-white/[0.08] text-neutral-300"
+                        }`}
+                      >
+                        {categoria.nombre}
+                      </button>
+                    ))}
+                  </div>
+                </aside>
 
-              <section className="min-h-0 min-w-0 overflow-y-auto p-3 md:p-4">
-                {categoriaNuevoPedido ? (
-                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    {categoriaNuevoPedido.items.map((producto) => {
-                      const cantidad =
-                        seleccionadosNuevoPedido[producto.id]?.cantidad ?? 0;
+                <section className="min-h-0 min-w-0 overflow-y-auto p-3 md:p-4">
+                  {categoriaNuevoPedido ? (
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      {categoriaNuevoPedido.items.map((producto) => {
+                        const cantidad =
+                          seleccionadosNuevoPedido[producto.id]?.cantidad ?? 0;
 
-                      return (
-                        <article
-                          key={producto.id}
-                          onClick={() => cambiarCantidadNuevoPedido(producto, 1)}
-                          className={`rounded-xl border p-3 transition-colors active:scale-[0.99] ${
-                            cantidad > 0
-                              ? "border-orange-400/50 bg-orange-500/10"
-                              : "border-white/[0.08] bg-white/[0.03]"
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <h3 className="line-clamp-2 text-sm font-black">
-                              {producto.nombre}
-                            </h3>
-                            {producto.descripcion && (
-                              <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">
-                                {producto.descripcion}
-                              </p>
-                            )}
-                            <div className="mt-3 flex items-center justify-between gap-3">
-                              <p className="text-base font-black text-orange-400">
-                                {formatCurrency(Number(producto.precio ?? 0))}
-                              </p>
-                              <div className="grid grid-cols-[36px_34px_36px] items-center rounded-xl border border-white/[0.08] bg-black/20">
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    cambiarCantidadNuevoPedido(producto, -1);
-                                  }}
-                                  className="flex h-9 items-center justify-center text-neutral-300 disabled:text-neutral-700"
-                                  disabled={cantidad === 0}
-                                  aria-label={`Restar ${producto.nombre}`}
+                        return (
+                          <article
+                            key={producto.id}
+                            onClick={() =>
+                              cambiarCantidadNuevoPedido(producto, 1)
+                            }
+                            className={`rounded-xl border p-3 transition-colors active:scale-[0.99] ${
+                              cantidad > 0
+                                ? "border-orange-400/50 bg-orange-500/10"
+                                : "border-white/[0.08] bg-white/[0.03]"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <h3 className="line-clamp-2 text-sm font-black">
+                                  {producto.nombre}
+                                </h3>
+                                <span
+                                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${
+                                    producto.bar_only
+                                      ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-200"
+                                      : "border-orange-300/40 bg-orange-500/10 text-orange-200"
+                                  }`}
                                 >
-                                  <MinusIcon className="h-4 w-4" />
-                                </button>
-                                <span className="text-center text-sm font-black">
-                                  {cantidad}
+                                  {producto.bar_only ? "Bar" : "Cocina"}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    cambiarCantidadNuevoPedido(producto, 1);
-                                  }}
-                                  className="flex h-9 items-center justify-center text-orange-300"
-                                  aria-label={`Agregar ${producto.nombre}`}
-                                >
-                                  <PlusIcon className="h-4 w-4" />
-                                </button>
+                              </div>
+                              {producto.descripcion && (
+                                <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">
+                                  {producto.descripcion}
+                                </p>
+                              )}
+                              <div className="mt-3 flex items-center justify-between gap-3">
+                                <p className="text-base font-black text-orange-400">
+                                  {formatCurrency(Number(producto.precio ?? 0))}
+                                </p>
+                                <div className="grid grid-cols-[36px_34px_36px] items-center rounded-xl border border-white/[0.08] bg-black/20">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      cambiarCantidadNuevoPedido(producto, -1);
+                                    }}
+                                    className="flex h-9 items-center justify-center text-neutral-300 disabled:text-neutral-700"
+                                    disabled={cantidad === 0}
+                                    aria-label={`Restar ${producto.nombre}`}
+                                  >
+                                    <MinusIcon className="h-4 w-4" />
+                                  </button>
+                                  <span className="text-center text-sm font-black">
+                                    {cantidad}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      cambiarCantidadNuevoPedido(producto, 1);
+                                    }}
+                                    className="flex h-9 items-center justify-center text-orange-300"
+                                    aria-label={`Agregar ${producto.nombre}`}
+                                  >
+                                    <PlusIcon className="h-4 w-4" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/[0.12] p-8 text-center text-sm text-neutral-500">
-                    No hay productos disponibles para este restaurante.
-                  </div>
-                )}
-              </section>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/[0.12] p-8 text-center text-sm text-neutral-500">
+                      No hay productos disponibles para este restaurante.
+                    </div>
+                  )}
+                </section>
 
-              <div className="min-w-0 shrink-0 border-t border-white/[0.08] bg-[#111] p-3 md:col-start-2 md:p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">
-                      Pedido
-                    </p>
-                    <p className="mt-1 truncate text-sm font-black text-yellow-300">
-                      {cantidadNuevoPedido} items · {formatCurrency(totalNuevoPedido)}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setResumenNuevoPedidoAbierto(true)}
-                    disabled={
-                      !mesaNuevoPedidoId || productosNuevoPedido.length === 0
-                    }
-                    className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[#E85D26] px-5 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
-                  >
-                    Ver resumen
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {resumenNuevoPedidoAbierto && (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6">
-          <div className="flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-white/[0.08] bg-[#141414] shadow-2xl shadow-black sm:mx-auto sm:max-w-md sm:rounded-2xl sm:border">
-            <div className="shrink-0 border-b border-white/[0.08] px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-yellow-300">
-                    Resumen
-                  </p>
-                  <h2 className="truncate text-lg font-black">Confirmar pedido</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setResumenNuevoPedidoAbierto(false)}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-neutral-300"
-                  aria-label="Cerrar resumen"
-                >
-                  <XMarkIcon className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-neutral-400">Mesa</span>
-                  <span className="font-bold text-neutral-100">
-                    {mesaNuevoPedido
-                      ? `Mesa ${mesaNuevoPedido.numero_mesa}`
-                      : "Sin mesa"}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <span className="text-neutral-400">Items</span>
-                  <span className="font-black text-yellow-300">
-                    {cantidadNuevoPedido}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-              {productosNuevoPedido.map((item) => (
-                <article
-                  key={item.producto.id}
-                  className="rounded-xl border border-yellow-300/20 bg-yellow-300/10 p-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 shrink-0 border-t border-white/[0.08] bg-[#111] p-3 md:col-start-2 md:p-4">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="line-clamp-2 text-sm font-black text-yellow-300">
-                        {item.producto.nombre}
-                      </h3>
-                      <p className="mt-1 text-xs font-bold text-neutral-400">
-                        {formatCurrency(item.producto.precio)} c/u
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">
+                        Pedido
+                      </p>
+                      <p className="mt-1 truncate text-sm font-black text-yellow-300">
+                        {cantidadNuevoPedido} items ·{" "}
+                        {formatCurrency(totalNuevoPedido)}
                       </p>
                     </div>
-                    <p className="shrink-0 text-sm font-black text-yellow-300">
-                      {formatCurrency(item.producto.precio * item.cantidad)}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={avanzarNuevoPedido}
+                      disabled={
+                        !mesaNuevoPedidoId || productosNuevoPedido.length === 0
+                      }
+                      className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[#E85D26] px-5 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+                    >
+                      Siguiente
+                    </button>
                   </div>
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <span className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-                      Cantidad
-                    </span>
-                    <div className="grid grid-cols-[42px_42px_42px] items-center rounded-xl border border-white/[0.08] bg-black/20">
-                      <button
-                        type="button"
-                        onClick={() => cambiarCantidadNuevoPedido(item.producto, -1)}
-                        className="flex h-10 items-center justify-center text-neutral-300"
-                        aria-label={`Restar ${item.producto.nombre}`}
-                      >
-                        <MinusIcon className="h-4 w-4" />
-                      </button>
-                      <span className="text-center text-base font-black text-neutral-100">
-                        {item.cantidad}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => cambiarCantidadNuevoPedido(item.producto, 1)}
-                        className="flex h-10 items-center justify-center text-yellow-300"
-                        aria-label={`Agregar ${item.producto.nombre}`}
-                      >
-                        <PlusIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <div className="shrink-0 border-t border-white/[0.08] bg-[#111] px-4 py-4">
-              {errorNuevoPedido && (
-                <p className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
-                  {errorNuevoPedido}
-                </p>
-              )}
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-bold text-neutral-400">Total pedido</span>
-                <span className="text-xl font-black text-yellow-300">
-                  {formatCurrency(totalNuevoPedido)}
-                </span>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={crearNuevoPedido}
-                disabled={
-                  guardandoNuevoPedido ||
-                  !mesaNuevoPedidoId ||
-                  productosNuevoPedido.length === 0
-                }
-                className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-[#E85D26] px-4 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
-              >
-                {guardandoNuevoPedido ? "GUARDANDO..." : "CONFIRMAR PEDIDO"}
-              </button>
-            </div>
+            )}
+
+            {nuevoPedidoPaso !== "productos" && (
+              <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto]">
+                <section className="min-h-0 overflow-y-auto p-4">
+                  {nuevoPedidoPaso === "notas" && (
+                    <div className="space-y-4">
+                      {productosConNotasNuevoPedido.map((item) => (
+                        <article
+                          key={item.producto.id}
+                          className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h3 className="text-base font-black text-neutral-100">
+                                {item.producto.nombre}
+                              </h3>
+                              <p className="mt-1 text-xs font-bold text-neutral-500">
+                                Agrega una nota opcional para cocina
+                              </p>
+                            </div>
+                            <span className="shrink-0 rounded-full border border-orange-300/40 bg-orange-500/10 px-3 py-1 text-[10px] font-black uppercase text-orange-200">
+                              Cocina
+                            </span>
+                          </div>
+                          <textarea
+                            value={notasNuevoPedido[item.producto.id] ?? ""}
+                            onChange={(event) =>
+                              escribirNotaNuevoPedido(
+                                item.producto.id,
+                                event.target.value,
+                              )
+                            }
+                            rows={3}
+                            maxLength={180}
+                            placeholder="Ej. sin cebolla, poca salsa, termino medio"
+                            className="mt-4 w-full resize-none rounded-xl border border-white/[0.08] bg-black/25 px-3 py-3 text-sm font-bold text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-orange-400/50"
+                          />
+                        </article>
+                      ))}
+                    </div>
+                  )}
+
+                  {nuevoPedidoPaso === "complementos" && (
+                    <div className="space-y-4">
+                      {productosCompuestosNuevoPedido.map((item) => {
+                        const requeridos = Number(
+                          item.producto.cant_complementos ?? 0,
+                        );
+                        const seleccionados =
+                          complementosNuevoPedido[item.producto.id] ?? [];
+
+                        return (
+                          <article
+                            key={item.producto.id}
+                            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h3 className="text-base font-black text-neutral-100">
+                                  {item.producto.nombre}
+                                </h3>
+                                <p className="mt-1 text-xs font-bold text-neutral-500">
+                                  Selecciona {requeridos} complementos
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-orange-400/30 px-3 py-1 text-xs font-black text-orange-300">
+                                {seleccionados.length}/{requeridos}
+                              </span>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {listaComplementos.map((complemento) => {
+                                const activo = seleccionados.includes(
+                                  complemento.id,
+                                );
+                                const bloqueado =
+                                  !activo && seleccionados.length >= requeridos;
+
+                                return (
+                                  <button
+                                    key={complemento.id}
+                                    type="button"
+                                    onClick={() =>
+                                      toggleComplementoNuevoPedido(
+                                        item.producto.id,
+                                        complemento.id,
+                                        requeridos,
+                                      )
+                                    }
+                                    className={`min-h-12 rounded-xl border px-3 py-2 text-left text-sm font-bold transition-colors ${
+                                      activo
+                                        ? "border-orange-400/60 bg-orange-500/15 text-orange-200"
+                                        : bloqueado
+                                          ? "border-white/[0.05] bg-white/[0.02] text-neutral-600"
+                                          : "border-white/[0.08] bg-white/[0.04] text-neutral-300"
+                                    }`}
+                                  >
+                                    {complemento.nombre}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {nuevoPedidoPaso === "flavors" && (
+                    <div className="space-y-4">
+                      {productosConFlavorsNuevoPedido.map((item) => {
+                        const selectedFlavorId =
+                          flavorsNuevoPedido[item.producto.id] ?? "";
+
+                        return (
+                          <article
+                            key={item.producto.id}
+                            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4"
+                          >
+                            <h3 className="text-base font-black text-neutral-100">
+                              {item.producto.nombre}
+                            </h3>
+                            <p className="mt-1 text-xs font-bold text-neutral-500">
+                              Elige una preparacion
+                            </p>
+
+                            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {item.producto.productos_flavors
+                                ?.slice()
+                                .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+                                .map((flavor) => {
+                                  const activo = selectedFlavorId === flavor.id;
+
+                                  return (
+                                    <button
+                                      key={flavor.id}
+                                      type="button"
+                                      onClick={() =>
+                                        seleccionarFlavorNuevoPedido(
+                                          item.producto.id,
+                                          flavor.id,
+                                        )
+                                      }
+                                      className={`min-h-12 rounded-xl border px-3 py-2 text-left text-sm font-bold transition-colors ${
+                                        activo
+                                          ? "border-yellow-300/60 bg-yellow-300/15 text-yellow-200"
+                                          : "border-white/[0.08] bg-white/[0.04] text-neutral-300"
+                                      }`}
+                                    >
+                                      {flavor.nombre}
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {nuevoPedidoPaso === "resumen" && (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-neutral-400">Mesa</span>
+                          <span className="font-bold text-neutral-100">
+                            {mesaNuevoPedido
+                              ? `Mesa ${mesaNuevoPedido.numero_mesa}`
+                              : "Sin mesa"}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <span className="text-neutral-400">Items</span>
+                          <span className="font-black text-yellow-300">
+                            {cantidadNuevoPedido}
+                          </span>
+                        </div>
+                      </div>
+
+                      {productosNuevoPedido.map((item) => {
+                        const notas = getNotasNuevoPedido(item.producto);
+
+                        return (
+                          <article
+                            key={item.producto.id}
+                            className="rounded-xl border border-yellow-300/20 bg-yellow-300/10 p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="line-clamp-2 text-sm font-black text-yellow-300">
+                                    {item.producto.nombre}
+                                  </h3>
+                                  <span
+                                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${
+                                      item.producto.bar_only
+                                        ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-200"
+                                        : "border-orange-300/40 bg-orange-500/10 text-orange-200"
+                                    }`}
+                                  >
+                                    {item.producto.bar_only ? "Bar" : "Cocina"}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-xs font-bold text-neutral-400">
+                                  {item.cantidad} x{" "}
+                                  {formatCurrency(item.producto.precio)} c/u
+                                </p>
+                                {notas && (
+                                  <p className="mt-2 text-xs font-bold text-orange-200">
+                                    {notas}
+                                  </p>
+                                )}
+                              </div>
+                              <p className="shrink-0 text-sm font-black text-yellow-300">
+                                {formatCurrency(
+                                  item.producto.precio * item.cantidad,
+                                )}
+                              </p>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                <div className="min-w-0 shrink-0 border-t border-white/[0.08] bg-[#111] p-3 md:p-4">
+                  {errorNuevoPedido && (
+                    <p className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
+                      {errorNuevoPedido}
+                    </p>
+                  )}
+                  {nuevoPedidoPaso === "resumen" && (
+                    <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+                      <span className="font-bold text-neutral-400">
+                        Total pedido
+                      </span>
+                      <span className="text-xl font-black text-yellow-300">
+                        {formatCurrency(totalNuevoPedido)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={retrocederNuevoPedido}
+                      className="flex h-12 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] px-5 text-center text-sm font-black uppercase tracking-wide text-neutral-300 transition-colors active:bg-white/[0.06]"
+                    >
+                      Atras
+                    </button>
+                    {nuevoPedidoPaso === "resumen" ? (
+                      <button
+                        type="button"
+                        onClick={crearNuevoPedido}
+                        disabled={
+                          guardandoNuevoPedido ||
+                          !mesaNuevoPedidoId ||
+                          productosNuevoPedido.length === 0
+                        }
+                        className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[#E85D26] px-5 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+                      >
+                        {guardandoNuevoPedido
+                          ? "GUARDANDO..."
+                          : "CONFIRMAR PEDIDO"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={avanzarNuevoPedido}
+                        disabled={
+                          (nuevoPedidoPaso === "complementos" &&
+                            !complementosNuevoPedidoCompletos) ||
+                          (nuevoPedidoPaso === "flavors" &&
+                            !flavorsNuevoPedidoCompletos)
+                        }
+                        className="flex h-12 shrink-0 items-center justify-center rounded-xl bg-[#E85D26] px-5 text-center text-sm font-black uppercase tracking-wide text-white transition-colors active:bg-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400"
+                      >
+                        Siguiente
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

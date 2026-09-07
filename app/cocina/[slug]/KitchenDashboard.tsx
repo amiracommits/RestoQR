@@ -22,6 +22,7 @@ interface Pedido {
   es_adicional: boolean;
   mesa_id: string;
   numero_pedido_dia?: number | null; // 👈 para numero de pedido
+  tipo_pedido?: "bar" | "cocina" | string | null;
   mesas: { numero_mesa: string };
   detalle_pedidos: DetallePedido[];
 }
@@ -116,6 +117,24 @@ export default function KitchenDashboard({
     if (minPasados <= 10) return "border-emerald-500 shadow-emerald-900/10";
     if (minPasados <= 15) return "border-amber-500 shadow-amber-900/20";
     return "border-red-600 animate-pulse shadow-red-900/40";
+  };
+
+  const getTipoPedidoBadge = (tipoPedido?: string | null) => {
+    const tipo = tipoPedido?.toLowerCase().trim();
+
+    if (tipo === "bar") {
+      return {
+        label: "BAR",
+        className:
+          "border-cyan-300/40 bg-cyan-400/15 text-cyan-200 shadow-cyan-950/30",
+      };
+    }
+
+    return {
+      label: "COCINA",
+      className:
+        "border-orange-300/40 bg-orange-500/15 text-orange-200 shadow-orange-950/30",
+    };
   };
 
   const handleLogout = async () => {
@@ -225,7 +244,7 @@ export default function KitchenDashboard({
       align: "center",
     });
 
-    const pdfUrl = doc.output("bloburl");
+    const pdfUrl = doc.output("bloburl").toString();
 
     if (previewWindow) {
       previewWindow.location.href = pdfUrl;
@@ -351,99 +370,129 @@ export default function KitchenDashboard({
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {pedidos.map((pedido: Pedido) => {
-          const borderStyle = getBordeColor(pedido.created_at);
-          return (
-            <div
-              key={pedido.id}
-              className={`bg-slate-800/50 rounded-3xl border-4 overflow-hidden flex flex-col shadow-2xl transition-all duration-500 ${borderStyle}`}
-            >
-              {/* Mantenemos tu estructura de tarjeta que ya es perfecta */}
-              <div className="bg-slate-700/50 p-4 flex justify-between items-start border-b border-slate-700 gap-3">
-              <div className="shrink-0">
-                <span className="inline-flex items-center rounded-lg bg-orange-600 px-2.5 py-1 text-[11px] font-black text-white">
-                  PEDIDO # {pedido.numero_pedido_dia ?? "S/N"}
-                </span>
-              </div>
-
-              <div className="flex flex-col items-end">
-                <span className="text-2xl font-black text-white">
-                  MESA {pedido.mesas?.numero_mesa || "S/N"}
-                </span>
-                <span className="text-[10px] font-black text-slate-400 bg-slate-900/50 px-2 py-0.5 rounded mt-1">
-                  HACE{" "}
-                  {Math.floor(
-                    (ahora - new Date(pedido.created_at).getTime()) / 60000,
-                  )}{" "}
-                  MIN
-                </span>
+      {pedidos.length === 0 ? (
+        <section className="flex min-h-[55vh] items-center justify-center">
+          <div className="max-w-md text-center">
+            <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-full border border-slate-700 bg-slate-800/70 shadow-2xl">
+              <div className="relative">
+                <div className="text-6xl font-black text-slate-600">Z</div>
+                <div className="absolute -right-8 -top-6 text-4xl font-black text-slate-500">
+                  Z
+                </div>
+                <div className="absolute -right-14 -top-11 text-2xl font-black text-slate-400">
+                  Z
+                </div>
               </div>
             </div>
-
-
-              {/* Badges de Tipo */}
-              <div className="flex items-center justify-center gap-2 mt-3 mb-2">
-                {pedido.es_adicional ? (
-                  <span className="bg-amber-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-md animate-pulse shadow-lg shadow-amber-900/40">
-                    ADICIONAL
-                  </span>
-                ) : (
-                  <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-emerald-900/10">
-                    PRINCIPAL
-                  </span>
-                )}
-              </div>
-
-              {/* Detalle de Productos */}
-              <div className="p-5 flex-1 space-y-4">
-                {pedido.detalle_pedidos?.map(
-                  (detalle: DetallePedido, idx: number) => (
-                    <div
-                      key={idx}
-                      className="flex gap-3 items-start border-b border-slate-700/30 pb-3 last:border-0"
+            <h2 className="mt-6 text-2xl font-black text-white">
+              Nada por aqui
+            </h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">
+              Relajate un rato. Cuando haya pedidos pendientes apareceran en
+              este panel.
+            </p>
+          </div>
+        </section>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {pedidos.map((pedido: Pedido) => {
+            const borderStyle = getBordeColor(pedido.created_at);
+            const tipoPedidoBadge = getTipoPedidoBadge(pedido.tipo_pedido);
+            return (
+              <div
+                key={pedido.id}
+                className={`bg-slate-800/50 rounded-3xl border-4 overflow-hidden flex flex-col shadow-2xl transition-all duration-500 ${borderStyle}`}
+              >
+                {/* Mantenemos tu estructura de tarjeta que ya es perfecta */}
+                <div className="bg-slate-700/50 p-4 flex justify-between items-start border-b border-slate-700 gap-3">
+                  <div className="flex shrink-0 flex-col items-start gap-2">
+                    <span className="inline-flex items-center rounded-lg bg-orange-600 px-2.5 py-1 text-[11px] font-black text-white">
+                      PEDIDO # {pedido.numero_pedido_dia ?? "S/N"}
+                    </span>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest shadow-lg ${tipoPedidoBadge.className}`}
                     >
-                      <span className="bg-orange-600 text-white font-black w-8 h-8 flex items-center justify-center rounded-lg text-sm shadow-lg shadow-orange-900/20 shrink-0">
-                        {detalle.cantidad}
-                      </span>
-                      <div className="flex flex-col flex-1">
-                        <span className="text-base font-bold text-slate-200 leading-tight">
-                          {detalle.productos?.nombre}
-                        </span>
-                        {detalle.notas && (
-                          <div className="mt-1.5 p-2 bg-slate-900/40 rounded-lg border-l-2 border-orange-500">
-                            <p className="text-[11px] text-orange-400 font-medium italic leading-relaxed">
-                              <span className="not-italic mr-1">📝</span>
-                              {detalle.notas}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ),
-                )}
-              </div>
+                      {tipoPedidoBadge.label}
+                    </span>
+                  </div>
 
-              <div className="space-y-3 p-4 bg-slate-900/30">
-                <button
-                  type="button"
-                  onClick={() => handleGenerarComanda(pedido)}
-                  className="w-full rounded-2xl border border-orange-500/30 bg-orange-500/10 py-4 font-black text-orange-200 shadow-lg shadow-orange-900/10 transition-all hover:bg-orange-500/20 active:scale-95"
-                >
-                  GENERAR COMANDA
-                </button>
-                <button
-                  type="button"
-                  onClick={() => completarPedido(pedido.id)}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-900/20"
-                >
-                  MARCAR COMPLETADO
-                </button>
+                  <div className="flex flex-col items-end">
+                    <span className="text-2xl font-black text-white">
+                      MESA {pedido.mesas?.numero_mesa || "S/N"}
+                    </span>
+                    <span className="text-[10px] font-black text-slate-400 bg-slate-900/50 px-2 py-0.5 rounded mt-1">
+                      HACE{" "}
+                      {Math.floor(
+                        (ahora - new Date(pedido.created_at).getTime()) / 60000,
+                      )}{" "}
+                      MIN
+                    </span>
+                  </div>
+                </div>
+
+                {/* Badges de Tipo */}
+                <div className="flex items-center justify-center gap-2 mt-3 mb-2">
+                  {pedido.es_adicional ? (
+                    <span className="bg-amber-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-md animate-pulse shadow-lg shadow-amber-900/40">
+                      ADICIONAL
+                    </span>
+                  ) : (
+                    <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-lg shadow-emerald-900/10">
+                      PRINCIPAL
+                    </span>
+                  )}
+                </div>
+
+                {/* Detalle de Productos */}
+                <div className="p-5 flex-1 space-y-4">
+                  {pedido.detalle_pedidos?.map(
+                    (detalle: DetallePedido, idx: number) => (
+                      <div
+                        key={idx}
+                        className="flex gap-3 items-start border-b border-slate-700/30 pb-3 last:border-0"
+                      >
+                        <span className="bg-orange-600 text-white font-black w-8 h-8 flex items-center justify-center rounded-lg text-sm shadow-lg shadow-orange-900/20 shrink-0">
+                          {detalle.cantidad}
+                        </span>
+                        <div className="flex flex-col flex-1">
+                          <span className="text-base font-bold text-slate-200 leading-tight">
+                            {detalle.productos?.nombre}
+                          </span>
+                          {detalle.notas && (
+                            <div className="mt-1.5 p-2 bg-slate-900/40 rounded-lg border-l-2 border-orange-500">
+                              <p className="text-[11px] text-orange-400 font-medium italic leading-relaxed">
+                                <span className="not-italic mr-1">📝</span>
+                                {detalle.notas}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ),
+                  )}
+                </div>
+
+                <div className="space-y-3 p-4 bg-slate-900/30">
+                  <button
+                    type="button"
+                    onClick={() => handleGenerarComanda(pedido)}
+                    className="w-full rounded-2xl border border-orange-500/30 bg-orange-500/10 py-4 font-black text-orange-200 shadow-lg shadow-orange-900/10 transition-all hover:bg-orange-500/20 active:scale-95"
+                  >
+                    GENERAR COMANDA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => completarPedido(pedido.id)}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-900/20"
+                  >
+                    MARCAR COMPLETADO
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {mensajeCajaCerrada && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">

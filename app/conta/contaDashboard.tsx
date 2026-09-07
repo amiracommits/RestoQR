@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import {
   ArrowDownTrayIcon,
+  ArrowRightOnRectangleIcon,
   DocumentMagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 export interface RestauranteConta {
@@ -85,6 +87,7 @@ export default function ContaDashboard({
   contadorNombre,
 }: ContaDashboardProps) {
   const supabase = createClient();
+  const router = useRouter();
   const [restauranteId, setRestauranteId] = useState(restaurantes[0]?.id ?? "");
   const [fechaInicio, setFechaInicio] = useState(todayISO());
   const [fechaFin, setFechaFin] = useState(todayISO());
@@ -92,6 +95,7 @@ export default function ContaDashboard({
   const [reporteGenerado, setReporteGenerado] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const restauranteSeleccionado = useMemo(
@@ -268,6 +272,25 @@ export default function ContaDashboard({
     }
   };
 
+  const handleLogout = async () => {
+    setCerrandoSesion(true);
+    setError(null);
+
+    const channels = supabase.getChannels();
+    channels.forEach((channel) => supabase.removeChannel(channel));
+
+    const { error: logoutError } = await supabase.auth.signOut();
+
+    if (logoutError) {
+      setError(logoutError.message);
+      setCerrandoSesion(false);
+      return;
+    }
+
+    router.replace("/");
+    router.refresh();
+  };
+
   return (
     <main className="min-h-screen bg-[#101214] px-4 py-6 text-neutral-100">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
@@ -281,6 +304,15 @@ export default function ContaDashboard({
             </h1>
             <p className="mt-1 text-sm text-neutral-400">{contadorNombre}</p>
           </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={cerrandoSesion}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-red-400/30 px-4 text-sm font-semibold text-red-200 transition hover:border-red-300 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500 md:self-end"
+          >
+            <ArrowRightOnRectangleIcon className="h-5 w-5" />
+            {cerrandoSesion ? "Cerrando..." : "Cerrar sesion"}
+          </button>
         </header>
 
         <section className="rounded-lg border border-white/[0.08] bg-[#181b1f] p-4">

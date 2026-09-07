@@ -1,34 +1,70 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createProduct, updateProduct } from './actions' // 1. Importamos las dos acción
 import Image from 'next/image'
 import Link from 'next/link'
+
+interface CategoriaProducto {
+  id: string
+  nombre: string
+}
+
+interface ProductoFlavor {
+  id?: string
+  nombre: string
+  orden?: number
+}
+
+interface ProductoInicial {
+  id: string
+  nombre?: string
+  precio?: number
+  descripcion?: string | null
+  categoria_id?: string
+  unsplash_id?: string | null
+  imagen_url?: string | null
+  es_complemento?: boolean
+  es_plato_compuesto?: boolean
+  es_gravamen_especial?: boolean
+  admite_flavors?: boolean
+  bar_only?: boolean
+  cant_complementos?: number
+  productos_flavors?: ProductoFlavor[]
+}
+
+interface UnsplashImage {
+  id: string
+  urls: {
+    raw: string
+    small: string
+  }
+}
 
 // 2. Definimos que puede recibir un 'productoInicial' opcional
 export default function FormularioProducto({
   categorias,
   productoInicial
 }: {
-  categorias: any[],
-  productoInicial?: any
+  categorias: CategoriaProducto[],
+  productoInicial?: ProductoInicial
 }) {
   // 3. Inicializamos estados con datos existentes si es edición
   const [search, setSearch] = useState(productoInicial?.nombre || '')
-  const [images, setImages] = useState([])
-  const [selectedId, setSelectedId] = useState(productoInicial?.unsplash_id || '')
+  const [images, setImages] = useState<UnsplashImage[]>([])
+  const [selectedId, setSelectedId] = useState(productoInicial?.unsplash_id ?? '')
   const [loadingImages, setLoadingImages] = useState(false)
   const [previewLocal, setPreviewLocal] = useState<string | null>(null)
+  const [admiteFlavors, setAdmiteFlavors] = useState(Boolean(productoInicial?.admite_flavors))
+  const [flavors, setFlavors] = useState<string[]>(
+    productoInicial?.productos_flavors
+      ?.slice()
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+      .map((flavor) => flavor.nombre) ?? ['']
+  )
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (search.length > 2) fetchImages()
-    }, 1000)
-    return () => clearTimeout(delayDebounceFn)
-  }, [search])
-
-  const fetchImages = async () => {
+  const fetchImages = useCallback(async () => {
     setLoadingImages(true)
     try {
       const res = await fetch(
@@ -41,7 +77,14 @@ export default function FormularioProducto({
     } finally {
       setLoadingImages(false)
     }
-  }
+  }, [search])
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (search.length > 2) fetchImages()
+    }, 1000)
+    return () => clearTimeout(delayDebounceFn)
+  }, [search, fetchImages])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -54,7 +97,7 @@ export default function FormularioProducto({
     }
   }
 
-  const handleUnsplashSelect = (img: any) => {
+  const handleUnsplashSelect = (img: UnsplashImage) => {
     const fullId = img.urls.raw.split('photo-')[1]?.split('?')[0]
     if (fullId) {
       setSelectedId(fullId)
@@ -63,8 +106,24 @@ export default function FormularioProducto({
     }
   }
 
+  const handleFlavorChange = (index: number, value: string) => {
+    setFlavors((current) =>
+      current.map((flavor, flavorIndex) => (flavorIndex === index ? value : flavor))
+    )
+  }
+
+  const addFlavor = () => {
+    setFlavors((current) => [...current, ''])
+  }
+
+  const removeFlavor = (index: number) => {
+    setFlavors((current) =>
+      current.length === 1 ? [''] : current.filter((_, flavorIndex) => flavorIndex !== index)
+    )
+  }
+
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl rounded-2xl bg-[#141414] p-4 sm:p-6">
       <header className="mb-6 sm:mb-8">
         <Link href="/admin/productos" className="text-sm text-neutral-500 transition-colors hover:text-neutral-200">
           ← Volver al listado
@@ -79,7 +138,6 @@ export default function FormularioProducto({
       <form
         action={productoInicial ? updateProduct : createProduct}
         className="grid grid-cols-1 gap-6 xl:gap-8 lg:grid-cols-2"
-        encType="multipart/form-data"
       >
         {/* 6. Campo oculto necesario para saber QUÉ producto actualizar */}
         {productoInicial && <input type="hidden" name="producto_id" value={productoInicial.id} />}
@@ -151,7 +209,7 @@ export default function FormularioProducto({
             <textarea
               name="descripcion"
               rows={3}
-              defaultValue={productoInicial?.descripcion}
+              defaultValue={productoInicial?.descripcion ?? ''}
               className="w-full rounded-xl border border-white/[0.07] bg-white/[0.04] px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 outline-none transition-colors focus:border-[#E85D26] focus:ring-2 focus:ring-[#E85D26]/20"
               placeholder="Describe los ingredientes..."
             />
@@ -198,7 +256,7 @@ export default function FormularioProducto({
                 </div>
               </label>
               {/* Toggle: Gravamen Especial */}
-              <label className="flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06] xl:col-span-2">
+              <label className="flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06]">
                 <input
                   type="checkbox"
                   name="es_gravamen_especial"
@@ -210,7 +268,75 @@ export default function FormularioProducto({
                   <span className="text-xs text-neutral-500">Aplica impuesto especial (ej. alcohol).</span>
                 </div>
               </label>
+
+              {/* Toggle: Admite sabores */}
+              <label className="flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06]">
+                <input
+                  type="checkbox"
+                  name="admite_flavors"
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-orange-500"
+                  checked={admiteFlavors}
+                  onChange={(event) => setAdmiteFlavors(event.target.checked)}
+                />
+                <div className="min-w-0">
+                  <span className="block text-sm font-medium text-neutral-200">¿Admite sabores?</span>
+                  <span className="text-xs text-neutral-500">Permite definir estilos o sabores para este producto.</span>
+                </div>
+              </label>
+
+              {/* Toggle: Exclusivo de bar */}
+              <label className="flex min-h-28 cursor-pointer items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06]">
+                <input
+                  type="checkbox"
+                  name="bar_only"
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-orange-500"
+                  defaultChecked={productoInicial?.bar_only || false}
+                />
+                <div className="min-w-0">
+                  <span className="block text-sm font-medium text-neutral-200">¿Exclusivo de bar?</span>
+                  <span className="text-xs text-neutral-500">Marca este producto para gestionarlo solo en bar.</span>
+                </div>
+              </label>
             </div>
+
+            {admiteFlavors && (
+              <div className="border-t border-white/[0.07] pt-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <label className="block text-sm font-medium text-neutral-300">
+                    Sabores disponibles
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addFlavor}
+                    className="rounded-lg border border-orange-500/30 px-3 py-1.5 text-xs font-medium text-orange-300 transition-colors hover:bg-orange-500/10"
+                  >
+                    + Agregar sabor
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {flavors.map((flavor, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        name="flavors"
+                        value={flavor}
+                        onChange={(event) => handleFlavorChange(index, event.target.value)}
+                        className="min-w-0 flex-1 rounded-lg border border-white/[0.07] bg-white/[0.04] px-3 py-2 text-sm text-neutral-100 placeholder-neutral-600 outline-none focus:border-[#E85D26] focus:ring-2 focus:ring-[#E85D26]/20"
+                        placeholder="Ej. Al ajillo"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeFlavor(index)}
+                        className="h-10 rounded-lg border border-white/[0.07] px-3 text-xs font-medium text-neutral-400 transition-colors hover:border-red-400/40 hover:text-red-300"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Input Numérico: Cantidad de Complementos */}
             <div className="border-t border-white/[0.07] pt-4">
@@ -227,7 +353,7 @@ export default function FormularioProducto({
                 placeholder="0"
               />
               <p className="mt-1 text-xs text-neutral-500">
-                Solo aplica si marcó este producto como "Plato Compuesto".
+                Solo aplica si marcó este producto como &quot;Plato Compuesto&quot;.
               </p>
             </div>
           </div>
@@ -270,7 +396,7 @@ export default function FormularioProducto({
               </div>
             ) : images.length > 0 ? (
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                {images.map((img: any) => {
+                {images.map((img) => {
                   const idLargo = img.urls.raw.split('photo-')[1]?.split('?')[0]
                   return (
                     <div

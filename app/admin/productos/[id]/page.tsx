@@ -17,20 +17,26 @@ export default async function EditarProductoPage({ params }: { params: Promise<{
     .single()
 
   // 2. Traer el producto Y las categorías en paralelo (Eficiencia)
-  const [productoRes, categoriasRes] = await Promise.all([
+  const [productoRes, categoriasRes, flavorsRes] = await Promise.all([
     supabase.from('productos').select('*').eq('id', id).single(),
-    supabase.from('categorias').select('id, nombre').eq('restaurante_id', perfil?.restaurante_id).order('nombre')
+    supabase.from('categorias').select('id, nombre').eq('restaurante_id', perfil?.restaurante_id).order('nombre'),
+    supabase.from('productos_flavors').select('id, nombre, orden').eq('producto_id', id).order('orden')
   ])
 
   if (productoRes.error || !productoRes.data) return notFound()
 
+  const productoInicial = {
+    ...productoRes.data,
+    productos_flavors: flavorsRes.data || [],
+  }
+
   return (
-    <main className="min-h-screen bg-slate-50 p-8">
+    <main className="min-h-screen bg-[#0f0f0f] p-8">
       <div className="max-w-4xl mx-auto">
         {/* Pasamos el producto actual como prop 'inicial' */}
         <FormularioProducto 
           categorias={categoriasRes.data || []} 
-          productoInicial={productoRes.data} 
+          productoInicial={productoInicial} 
         />
       </div>
     </main>

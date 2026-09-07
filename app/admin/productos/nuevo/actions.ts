@@ -3,12 +3,47 @@ import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+const parseFlavorNames = (formData: FormData) => {
+  const seen = new Set<string>()
+
+  return formData
+    .getAll('flavors')
+    .map((value) => String(value).trim())
+    .filter((nombre) => {
+      if (!nombre) return false
+
+      const key = nombre.toLowerCase()
+      if (seen.has(key)) return false
+
+      seen.add(key)
+      return true
+    })
+}
+
+const saveProductFlavors = async (
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  productId: string,
+  flavorNames: string[],
+) => {
+  const rows = flavorNames.map((nombre, index) => ({
+    producto_id: productId,
+    nombre,
+    orden: index,
+  }))
+
+  const { error } = await supabase.from('productos_flavors').insert(rows)
+  if (error) throw new Error(error.message)
+}
+
 export async function createProduct(formData: FormData) {
   const supabase = await createClient()
   const es_complemento = formData.get('es_complemento') === 'on';
   const es_plato_compuesto = formData.get('es_plato_compuesto') === 'on';
   const cant_complementos = parseInt(formData.get('cant_complementos') as string) || 0;
   const es_gravamen_especial = formData.get('es_gravamen_especial') === 'on';
+  const admite_flavors = formData.get('admite_flavors') === 'on';
+  const bar_only = formData.get('bar_only') === 'on';
+  const flavors = admite_flavors ? parseFlavorNames(formData) : [];
 
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -58,12 +93,22 @@ export async function createProduct(formData: FormData) {
     es_complemento,
     es_plato_compuesto,
     cant_complementos,
-    es_gravamen_especial
+    es_gravamen_especial,
+    admite_flavors,
+    bar_only
   }
 
 
-  const { error } = await supabase.from('productos').insert([rawFormData])
+  const { data: producto, error } = await supabase
+    .from('productos')
+    .insert([rawFormData])
+    .select('id')
+    .single()
   if (error) throw new Error(error.message)
+
+  if (producto?.id && flavors.length > 0) {
+    await saveProductFlavors(supabase, producto.id, flavors)
+  }
 
   if (slug) revalidatePath(`/${slug}`, 'page')
   redirect('/admin/productos')
@@ -119,6 +164,9 @@ export async function updateProduct(formData: FormData) {
   const es_plato_compuesto = formData.get('es_plato_compuesto') === 'on';
   const cant_complementos = parseInt(formData.get('cant_complementos') as string) || 0;
   const es_gravamen_especial = formData.get('es_gravamen_especial') === 'on';
+  const admite_flavors = formData.get('admite_flavors') === 'on';
+  const bar_only = formData.get('bar_only') === 'on';
+  const flavors = admite_flavors ? parseFlavorNames(formData) : [];
 
 
   // 1. Obtener datos actuales del producto (para saber si hay que borrar una imagen vieja)
@@ -165,11 +213,24 @@ export async function updateProduct(formData: FormData) {
       es_complemento,
       es_plato_compuesto,
       cant_complementos,
-      es_gravamen_especial
+      es_gravamen_especial,
+      admite_flavors,
+      bar_only
     })
     .eq('id', productId)
 
   if (error) throw new Error(error.message)
+
+  const { error: deleteFlavorsError } = await supabase
+    .from('productos_flavors')
+    .delete()
+    .eq('producto_id', productId)
+
+  if (deleteFlavorsError) throw new Error(deleteFlavorsError.message)
+
+  if (flavors.length > 0) {
+    await saveProductFlavors(supabase, productId, flavors)
+  }
 
   // 4. Revalidar
   const slug = (Array.isArray(productoViejo?.restaurantes) ? productoViejo?.restaurantes[0] : productoViejo?.restaurantes)?.slug
