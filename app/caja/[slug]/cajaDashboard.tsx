@@ -416,7 +416,8 @@ const handleIrACierre = async () => {
       .from("facturas")
       .select("id", { count: "exact", head: true })
       .eq("restaurante_id", restaurante.id)
-      .eq("estado", "pagada");
+      .eq("estado", "pagada")
+      .neq("estado", "anulada");
 
     if (pagadasError) throw pagadasError;
 
@@ -430,7 +431,8 @@ const handleIrACierre = async () => {
       .from("facturas")
       .select("id", { count: "exact", head: true })
       .eq("restaurante_id", restaurante.id)
-      .eq("estado", "generada");
+      .eq("estado", "generada")
+      .neq("estado", "anulada");
 
     if (generadasError) throw generadasError;
 

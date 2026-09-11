@@ -6,6 +6,7 @@ import {
   ArrowRightOnRectangleIcon,
   ChevronDownIcon,
   Cog6ToothIcon,
+  DocumentTextIcon,
   FolderIcon,
   HomeIcon,
   ShoppingBagIcon,
@@ -17,6 +18,7 @@ import { useState } from 'react'
 const menuItems = [
   { nombre: 'Panel', href: '/admin/dashboard', icon: HomeIcon },
   { nombre: 'Pedidos', href: '/admin/pedidos', icon: ClipboardDocumentListIcon },
+  { nombre: 'Facturas', href: '/admin/facturas', icon: DocumentTextIcon },
   { nombre: 'Productos', href: '/admin/productos', icon: ShoppingBagIcon },
   { nombre: 'Categorías', href: '/admin/categorias', icon: FolderIcon },
   { nombre: 'Config', href: '/admin/config', icon: Cog6ToothIcon },
@@ -146,7 +148,7 @@ export default function Sidebar() {
       </aside>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.07] bg-[#111111]/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl md:hidden">
-        <div className="grid grid-cols-6 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {[...menuItems, { nombre: 'Reportes', href: '/admin/reports/ventas', icon: BoltIcon }].map((item) => {
             const isActive = pathname.startsWith(item.href)
             const Icon = item.icon

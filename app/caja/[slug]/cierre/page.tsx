@@ -58,6 +58,7 @@ export default async function CierreCajaPage({
     `)
     .eq("restaurante_id", restaurante.id)
     .eq("estado", "pagada")
+    .neq("estado", "anulada")
     .order("created_at", { ascending: true });
 
   if (facturasError) {

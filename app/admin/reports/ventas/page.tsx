@@ -82,6 +82,7 @@ export default async function VentasReportPage({
     `)
     .eq('restaurante_id', perfil.restaurante_id)
     .in('estado', ['pagada', 'cerrada'])
+    .neq('estado', 'anulada')
     .gte('created_at', rangeStart)
     .lt('created_at', rangeEnd)
     .order('created_at', { ascending: false })
