@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import jsPDF from "jspdf";
+import { registerRobotoMono } from "@/utils/pdfFonts";
 
 // --- INTERFACES (Tus definiciones originales) ---
 interface DetallePedido {
@@ -163,6 +164,7 @@ export default function KitchenDashboard({
       unit: "mm",
       format: [80, 220],
     });
+    const pdfFont = await registerRobotoMono(doc);
 
     let y = 8;
     const pageWidth = 80;
@@ -170,7 +172,7 @@ export default function KitchenDashboard({
     const contentWidth = pageWidth - marginX * 2;
 
     doc.setTextColor(0, 0, 0);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(pdfFont, "bold");
     doc.setFontSize(11);
     doc.text(restaurante.nombre.toUpperCase(), pageWidth / 2, y, {
       align: "center",
@@ -197,7 +199,7 @@ export default function KitchenDashboard({
       y,
     );
     y += 5;
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.text(
       `Hora: ${new Date(pedido.created_at).toLocaleString("es-HN")}`,
       marginX,
@@ -214,7 +216,7 @@ export default function KitchenDashboard({
         y = 8;
       }
 
-      doc.setFont("helvetica", "bold");
+      doc.setFont(pdfFont, "bold");
       doc.setFontSize(10);
       const producto = `${index + 1}. ${detalle.cantidad}x ${
         detalle.productos?.nombre || "Producto"
@@ -224,7 +226,7 @@ export default function KitchenDashboard({
       y += productoLineas.length * 5;
 
       if (detalle.notas) {
-        doc.setFont("helvetica", "normal");
+        doc.setFont(pdfFont, "normal");
         doc.setFontSize(8);
         const notaLineas = doc.splitTextToSize(
           `Nota: ${detalle.notas}`,
@@ -239,7 +241,7 @@ export default function KitchenDashboard({
 
     doc.line(marginX, y, pageWidth - marginX, y);
     y += 6;
-    doc.setFont("helvetica", "bold");
+    doc.setFont(pdfFont, "bold");
     doc.setFontSize(9);
     doc.text("Preparar segun detalle.", pageWidth / 2, y, {
       align: "center",

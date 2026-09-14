@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { finalizarPedidoCompleto } from "./actions";
 import { CajaDashboardProps, Factura, DetalleFactura } from "./types"; // 👈 Tipos externos
+import { registerRobotoMono } from "@/utils/pdfFonts";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -477,11 +478,12 @@ export default function CajaDashboard({
   }
 };
 
-  const handleVerCuentaPDF = (factura: Factura) => {
+  const handleVerCuentaPDF = async (factura: Factura) => {
     const doc = new jsPDF({
       unit: "mm",
       format: [80, 200],
     });
+    const pdfFont = await registerRobotoMono(doc);
     const fecha = format(new Date(factura.created_at), "dd/MM/yyyy HH:mm");
     const mesa = factura.mesas?.numero_mesa ?? "S/N";
     const pedido = factura.numero_pedido_amigable ?? "S/N";
@@ -489,7 +491,7 @@ export default function CajaDashboard({
     doc.setTextColor(0, 0, 0);
     doc.setDrawColor(0, 0, 0);
     doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(pdfFont, "bold");
     doc.text(restaurante.nombre.toUpperCase(), 40, 10, { align: "center" });
 
     doc.setFontSize(9);
@@ -498,7 +500,7 @@ export default function CajaDashboard({
     doc.line(5, 20, 75, 20);
 
     doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.text(`Mesa: ${mesa}`, 5, 26);
     doc.text(`Pedido: #${pedido}`, 5, 31);
     doc.text(`Fecha: ${fecha}`, 5, 36);
@@ -531,6 +533,7 @@ export default function CajaDashboard({
         fontSize: 7,
         cellPadding: 1,
         lineColor: [0, 0, 0],
+        font: pdfFont,
       },
       columnStyles: {
         0: { halign: "center", cellWidth: 10 },
@@ -545,14 +548,14 @@ export default function CajaDashboard({
 
     doc.line(5, finalY + 4, 75, finalY + 4);
     doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(pdfFont, "bold");
     doc.text("TOTAL", 5, finalY + 11);
     doc.text(`L. ${factura.total.toFixed(2)}`, 75, finalY + 11, {
       align: "right",
     });
 
     doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.text("Resumen de consumo. No es factura fiscal.", 40, finalY + 22, {
       align: "center",
     });
