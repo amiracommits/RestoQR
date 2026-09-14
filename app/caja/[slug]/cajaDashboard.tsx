@@ -42,6 +42,19 @@ export default function CajaDashboard({
   //estado para bloquear cierre mientras ejecuta
   const [validandoCierre, setValidandoCierre] = useState(false);
   const [formaPago, setFormaPago] = useState<FormaPago | "">("");
+  const [mostrarDniSenior, setMostrarDniSenior] = useState(false);
+  const [dniSenior, setDniSenior] = useState("");
+  const [descuentosSeniorAplicados, setDescuentosSeniorAplicados] = useState<
+    Record<string, boolean>
+  >({});
+  const [aplicandoDescuentoSenior, setAplicandoDescuentoSenior] =
+    useState(false);
+  const [mensajeDescuentoSenior, setMensajeDescuentoSenior] = useState<
+    string | null
+  >(null);
+  const [errorDescuentoSenior, setErrorDescuentoSenior] = useState<
+    string | null
+  >(null);
   const [menuUsuarioAbierto, setMenuUsuarioAbierto] = useState(false);
   const [modalAperturaAbierto, setModalAperturaAbierto] = useState(false);
   const [comentarioApertura, setComentarioApertura] = useState("");
@@ -127,6 +140,10 @@ export default function CajaDashboard({
         setFacturaParaCobrar(null);
         setFormaPago("");
         setImpresionConfirmada(false);
+        setMostrarDniSenior(false);
+        setDniSenior("");
+        setMensajeDescuentoSenior(null);
+        setErrorDescuentoSenior(null);
       } else {
         alert("Error: " + result.error);
       }
@@ -212,8 +229,157 @@ export default function CajaDashboard({
 
   const handleGenerarFactura = (facturaId: string) => {
     // Abrimos la ruta de impresión en una pestaña nueva
-    const url = `/caja/${restaurante.slug}/imprimir/${facturaId}`;
+    const params = new URLSearchParams();
+    if (formaPago) params.set("forma_pago", formaPago);
+    const queryString = params.toString();
+    const url = `/caja/${restaurante.slug}/imprimir/${facturaId}${
+      queryString ? `?${queryString}` : ""
+    }`;
     window.open(url, "_blank", "width=400,height=600");
+  };
+
+  const mostrarFormularioDescuentoSenior = () => {
+    if (!facturaParaCobrar || !formaPago) return;
+    if (
+      descuentosSeniorAplicados[facturaParaCobrar.id] ||
+      Number(facturaParaCobrar.valor_descuento ?? 0) > 0
+    ) {
+      setErrorDescuentoSenior("Esta factura ya tiene un descuento senior aplicado.");
+      setMensajeDescuentoSenior(null);
+      return;
+    }
+    setMostrarDniSenior(true);
+    setMensajeDescuentoSenior(null);
+    setErrorDescuentoSenior(null);
+  };
+
+  const aplicarDescuentoSenior = async () => {
+    if (!facturaParaCobrar || !formaPago || aplicandoDescuentoSenior) return;
+    if (
+      descuentosSeniorAplicados[facturaParaCobrar.id] ||
+      Number(facturaParaCobrar.valor_descuento ?? 0) > 0
+    ) {
+      setErrorDescuentoSenior("Esta factura ya tiene un descuento senior aplicado.");
+      setMensajeDescuentoSenior(null);
+      return;
+    }
+
+    const dniNormalizado = dniSenior.replace(/\D/g, "");
+
+    if (!/^\d{13}$/.test(dniNormalizado)) {
+      setErrorDescuentoSenior("Ingresa un DNI valido de 13 digitos.");
+      setMensajeDescuentoSenior(null);
+      return;
+    }
+
+    const anioNacimiento = Number(dniNormalizado.slice(4, 8));
+    const anioActual = new Date().getFullYear();
+    const edad = anioActual - anioNacimiento;
+
+    if (
+      !Number.isInteger(anioNacimiento) ||
+      anioNacimiento < 1900 ||
+      anioNacimiento > anioActual ||
+      edad < 0
+    ) {
+      setErrorDescuentoSenior("El año de nacimiento del DNI no es valido.");
+      setMensajeDescuentoSenior(null);
+      return;
+    }
+
+    setAplicandoDescuentoSenior(true);
+    setErrorDescuentoSenior(null);
+    setMensajeDescuentoSenior(null);
+
+    try {
+      const { data: configuracion, error: configError } = await supabase
+        .from("configuracion_global")
+        .select(
+          "tercera_edad_min_value, tercera_edad_max_value, cuarta_edad_min_value, cuarta_edad_max_value",
+        )
+        .eq("clave", "senior")
+        .limit(1);
+
+      const configuracionSenior = configuracion?.[0];
+
+      if (configError || !configuracionSenior) {
+        throw new Error(
+          configError?.message || "Configuracion de descuento senior no encontrada.",
+        );
+      }
+
+      const edadMinimaTercera = Number(configuracionSenior.tercera_edad_min_value ?? 0);
+      const edadMaximaTercera = Number(configuracionSenior.tercera_edad_max_value ?? 0);
+      const edadMinimaCuarta = Number(configuracionSenior.cuarta_edad_min_value ?? 0);
+      const edadMaximaCuarta = Number(configuracionSenior.cuarta_edad_max_value ?? 0);
+      const aplicaTerceraEdad =
+        edad >= edadMinimaTercera &&
+        (edadMaximaTercera === 0 || edad <= edadMaximaTercera);
+      const aplicaCuartaEdad =
+        edadMinimaCuarta > 0 &&
+        edad >= edadMinimaCuarta &&
+        (edadMaximaCuarta === 0 || edad <= edadMaximaCuarta);
+
+      if (!aplicaTerceraEdad && !aplicaCuartaEdad) {
+        setErrorDescuentoSenior(
+          `Cliente no aplica a descuento. Edad calculada: ${edad} anios.`,
+        );
+        return;
+      }
+
+      const { data, error } = await supabase.rpc(
+        "aplicar_descuento_senior_factura",
+        {
+          p_factura_id: facturaParaCobrar.id,
+          p_edad: edad,
+        },
+      );
+
+      if (error) throw error;
+
+      const resultado = Array.isArray(data) ? data[0] : data;
+      const totalActualizado = Number(resultado?.total ?? facturaParaCobrar.total);
+      const descuentoAplicado = Number(resultado?.valor_descuento ?? 0);
+      const porcentajeDescuento = Number(resultado?.porcentaje_descuento ?? 0);
+      const tipoDescuento = String(resultado?.tipo_descuento ?? "senior");
+
+      setFacturaParaCobrar((prev) =>
+        prev
+          ? {
+              ...prev,
+              total: totalActualizado,
+              valor_descuento: descuentoAplicado,
+            }
+          : prev,
+      );
+      setFacturas((prev) =>
+        prev.map((factura) =>
+          factura.id === facturaParaCobrar.id
+            ? {
+                ...factura,
+                total: totalActualizado,
+                valor_descuento: descuentoAplicado,
+              }
+            : factura,
+        ),
+      );
+      setMensajeDescuentoSenior(
+        `Descuento ${tipoDescuento} aplicado: ${porcentajeDescuento.toFixed(2)}% = L. ${descuentoAplicado.toFixed(2)}.`,
+      );
+      setDescuentosSeniorAplicados((prev) => ({
+        ...prev,
+        [facturaParaCobrar.id]: true,
+      }));
+      router.refresh();
+    } catch (error) {
+      setErrorDescuentoSenior(
+        error instanceof Error
+          ? error.message
+          : "No se pudo aplicar el descuento.",
+      );
+    } finally {
+      setAplicandoDescuentoSenior(false);
+    }
   };
 
   const abrirDivisionFactura = (factura: Factura) => {
@@ -602,6 +768,12 @@ const handleIrACierre = async () => {
                   </span>
                 </div>
               ))}
+              {Number(fac.valor_descuento ?? 0) > 0 && (
+                <div className="flex justify-between pt-2 text-sm font-black text-yellow-300">
+                  <span>Descuento aplicado</span>
+                  <span>- L. {Number(fac.valor_descuento ?? 0).toFixed(2)}</span>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-slate-700 pt-4 mb-4 text-right text-2xl font-black text-orange-500">
@@ -613,6 +785,16 @@ const handleIrACierre = async () => {
                 () => {
                   setImpresionConfirmada(false)
                   setFormaPago("")
+                  setMostrarDniSenior(false)
+                  setDniSenior("")
+                  setMensajeDescuentoSenior(null)
+                  setErrorDescuentoSenior(null)
+                  if (Number(fac.valor_descuento ?? 0) > 0) {
+                    setDescuentosSeniorAplicados((prev) => ({
+                      ...prev,
+                      [fac.id]: true,
+                    }))
+                  }
                   setFacturaParaCobrar(fac)
                 }   
               }
@@ -650,6 +832,10 @@ const handleIrACierre = async () => {
         setFacturaParaCobrar(null)
         setImpresionConfirmada(false)
         setFormaPago("")
+        setMostrarDniSenior(false)
+        setDniSenior("")
+        setMensajeDescuentoSenior(null)
+        setErrorDescuentoSenior(null)
       }}
 
         className="absolute -top-3 -right-3 bg-red-500 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-90 font-bold z-[60]"
@@ -663,6 +849,19 @@ const handleIrACierre = async () => {
         <h2 className="text-lg font-black uppercase mb-1">
           {restaurante.nombre}
         </h2>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900">
+        <div className="flex items-center justify-between font-bold">
+          <span>Total factura</span>
+          <span>L. {Number(facturaParaCobrar.total ?? 0).toFixed(2)}</span>
+        </div>
+        {Number(facturaParaCobrar.valor_descuento ?? 0) > 0 && (
+          <div className="mt-1 flex items-center justify-between text-xs font-bold text-emerald-700">
+            <span>Descuento aplicado</span>
+            <span>L. {Number(facturaParaCobrar.valor_descuento ?? 0).toFixed(2)}</span>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 flex flex-col gap-2">
@@ -690,6 +889,82 @@ const handleIrACierre = async () => {
         >
           🖨️ Imprimir
         </button>
+
+        <button
+          type="button"
+          onClick={mostrarFormularioDescuentoSenior}
+          disabled={
+            !formaPago ||
+            descuentosSeniorAplicados[facturaParaCobrar.id] ||
+            Number(facturaParaCobrar.valor_descuento ?? 0) > 0
+          }
+          className={`w-full rounded-lg px-2 py-3 text-[11px] font-bold leading-tight text-white ${
+            !formaPago ||
+            descuentosSeniorAplicados[facturaParaCobrar.id] ||
+            Number(facturaParaCobrar.valor_descuento ?? 0) > 0
+              ? "bg-orange-600/50 cursor-not-allowed"
+              : "bg-orange-600 hover:bg-orange-700"
+          }`}
+        >
+          {descuentosSeniorAplicados[facturaParaCobrar.id] ||
+          Number(facturaParaCobrar.valor_descuento ?? 0) > 0
+            ? "Descuento senior aplicado"
+            : "Aplicar descuento de tercera/cuarta edad"}
+        </button>
+
+        {mostrarDniSenior && (
+          <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-bold uppercase text-slate-700">
+                DNI del cliente
+              </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={13}
+                value={dniSenior}
+                onChange={(event) =>
+                  setDniSenior(event.target.value.replace(/\D/g, "").slice(0, 13))
+                }
+                placeholder="9999999999999"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={aplicarDescuentoSenior}
+              disabled={
+                aplicandoDescuentoSenior ||
+                dniSenior.length !== 13 ||
+                descuentosSeniorAplicados[facturaParaCobrar.id] ||
+                Number(facturaParaCobrar.valor_descuento ?? 0) > 0
+              }
+              className={`mt-2 w-full rounded-lg px-3 py-2 text-xs font-bold text-white ${
+                aplicandoDescuentoSenior ||
+                dniSenior.length !== 13 ||
+                descuentosSeniorAplicados[facturaParaCobrar.id] ||
+                Number(facturaParaCobrar.valor_descuento ?? 0) > 0
+                  ? "bg-orange-600/50 cursor-not-allowed"
+                  : "bg-orange-600 hover:bg-orange-700"
+              }`}
+            >
+              {aplicandoDescuentoSenior ? "Aplicando..." : "Aplicar"}
+            </button>
+          </div>
+        )}
+
+        {mensajeDescuentoSenior && (
+          <p className="rounded-lg border border-emerald-500/20 bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-700">
+            {mensajeDescuentoSenior}
+          </p>
+        )}
+
+        {errorDescuentoSenior && (
+          <p className="rounded-lg border border-red-500/20 bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700">
+            {errorDescuentoSenior}
+          </p>
+        )}
 
         <button
           onClick={handleConfirmarPago}

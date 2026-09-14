@@ -2,12 +2,22 @@
 import { createClient } from "@/utils/supabase/server";
 import { notFound } from "next/navigation";
 
+type DetalleFacturaImpresion = {
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+  productos: { nombre: string | null } | null;
+};
+
 export default async function PaginaImpresion({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; id: string }>;
+  searchParams: Promise<{ forma_pago?: string }>;
 }) {
   const { id } = await params;
+  const { forma_pago } = await searchParams;
   const supabase = await createClient();
 
   // 1. Traemos la factura con la nueva metadata tributaria de la DEI
@@ -20,6 +30,8 @@ export default async function PaginaImpresion({
       rtn_cliente,
       created_at,
       total,
+      forma_pago,
+      valor_descuento,
       numero_pedido_amigable,
       mesas (numero_mesa),
       restaurantes (
@@ -48,19 +60,30 @@ export default async function PaginaImpresion({
   const impuestoEspecial = Number(factura.impuesto_iva_especial ?? 0);
   const impuestoTotal = impuestoNormal + impuestoEspecial;
   const subtotalSinImpuesto = Number(factura.total ?? 0) - impuestoTotal;
+  const valorDescuento = Number(factura.valor_descuento ?? 0);
+  const formaPagoParam = ["efectivo", "tarjeta", "transferencia"].includes(
+    String(forma_pago ?? "").toLowerCase(),
+  )
+    ? String(forma_pago).toLowerCase()
+    : null;
+  const formaPagoFinal = factura.forma_pago || formaPagoParam;
+  const formaPago = formaPagoFinal
+    ? String(formaPagoFinal).replace(/_/g, " ").toUpperCase()
+    : "NO DEFINIDA";
 
 
   return (
     <div className="bg-white min-h-screen p-0 flex justify-center">
       {/* Estilo específico para papel térmico de 80mm y tipografía monoespaciada */}
       <style dangerouslySetInnerHTML={{ __html: `
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700;900&display=swap');
         @media print {
           body { margin: 0; padding: 0; background: white; }
           @page { size: 80mm auto; margin: 0; }
         }
         .ticket-container { 
           width: 80mm; 
-          font-family: 'Courier New', Courier, monospace; 
+          font-family: 'Roboto Mono', 'Courier New', monospace; 
           line-height: 1.2;
           margin: 0;
           padding: 0;
@@ -121,6 +144,7 @@ export default async function PaginaImpresion({
         <div className="space-y-1 mb-3 text-[10px]">
           <p>FECHA: {new Date(factura.created_at).toLocaleString('es-HN')}</p>
           <p>MESA: {factura.mesas?.numero_mesa}</p>
+          <p>FORMA DE PAGO: {formaPago}</p>
           <p className="uppercase">CLIENTE: {factura.nombre_cliente || 'CLIENTE FINAL'}</p>
           {factura.rtn_cliente && <p>RTN CLIENTE: {factura.rtn_cliente}</p>}
         </div>
@@ -136,7 +160,7 @@ export default async function PaginaImpresion({
             </tr>
           </thead>
           <tbody>
-            {factura.detalle_facturas.map((det: any, i: number) => (
+            {(factura.detalle_facturas as DetalleFacturaImpresion[]).map((det, i) => (
               <tr key={i} className="align-top">
                 <td className="py-1 pr-2">
                   {det.cantidad}x {det.productos?.nombre}
@@ -165,6 +189,13 @@ export default async function PaginaImpresion({
           <span>VALOR ISV ESPECIAL (18%)</span>
           <span>L. {impuestoEspecial.toFixed(2)}</span>
         </div>
+
+        {valorDescuento > 0 && (
+          <div className="flex justify-between text-[11px] font-bold">
+            <span>DESCUENTO APLICADO</span>
+            <span>- L. {valorDescuento.toFixed(2)}</span>
+          </div>
+        )}
 
         <div className="border-t border-black my-1"></div>
 

@@ -50,6 +50,7 @@ export default function KitchenDashboard({
   const router = useRouter();
   const supabase = createClient();
   const [mounted, setMounted] = useState(false);
+  const [comandasGeneradas, setComandasGeneradas] = useState<Record<string, boolean>>({});
   const [mensajeCajaCerrada, setMensajeCajaCerrada] = useState<string | null>(
     null,
   );
@@ -251,6 +252,11 @@ export default function KitchenDashboard({
     } else {
       window.open(pdfUrl, "_blank");
     }
+
+    setComandasGeneradas((prev) => ({
+      ...prev,
+      [pedido.id]: true,
+    }));
   };
 
   /*DEPRECADO <ESTA FUNCION YA NO SE LLAMA DESDE EL BOTON DE COMPLETAR PEDIDO
@@ -291,7 +297,17 @@ export default function KitchenDashboard({
     router.refresh();
   };
 
-  const completarPedido = async (id: string) => {
+  const completarPedido = async (pedido: Pedido) => {
+    const comandaGenerada = comandasGeneradas[pedido.id] === true;
+
+    if (!comandaGenerada) {
+      const confirmar = window.confirm(
+        "No se ha generado la comanda para este pedido. Deseas marcarlo como completado de todas formas?",
+      );
+
+      if (!confirmar) return;
+    }
+
     let cajaAbierta = false;
 
     try {
@@ -308,11 +324,11 @@ export default function KitchenDashboard({
     const pedidosPrevios = [...pedidos];
 
     // Update optimista en UI
-    setPedidos(pedidos.filter((p) => p.id !== id));
+    setPedidos(pedidos.filter((p) => p.id !== pedido.id));
 
     // ÚNICA LLAMADA: El RPC orquesta todo
     const { error: rpcError } = await supabase.rpc("procesar_entrega_pedido", {
-      target_pedido_id: id,
+      target_pedido_id: pedido.id,
     });
 
     if (rpcError) {
@@ -322,6 +338,11 @@ export default function KitchenDashboard({
       return;
     }
 
+    setComandasGeneradas((prev) => {
+      const copia = { ...prev };
+      delete copia[pedido.id];
+      return copia;
+    });
     router.refresh();
   };
 
@@ -482,7 +503,7 @@ export default function KitchenDashboard({
                   </button>
                   <button
                     type="button"
-                    onClick={() => completarPedido(pedido.id)}
+                    onClick={() => completarPedido(pedido)}
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-900/20"
                   >
                     MARCAR COMPLETADO

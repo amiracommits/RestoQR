@@ -15,6 +15,7 @@ export interface DetalleFactura {
 export interface Factura {
   id: string;
   total: number;
+  valor_descuento?: number | null;
   estado: string;
   numero_pedido_amigable: number;
   created_at: string;
