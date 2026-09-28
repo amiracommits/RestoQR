@@ -5,7 +5,6 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { finalizarPedidoCompleto } from "./actions";
 import { CajaDashboardProps, Factura, DetalleFactura } from "./types"; // 👈 Tipos externos
-import { registerRobotoMono } from "@/utils/pdfFonts";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -230,12 +229,7 @@ export default function CajaDashboard({
 
   const handleGenerarFactura = (facturaId: string) => {
     // Abrimos la ruta de impresión en una pestaña nueva
-    const params = new URLSearchParams();
-    if (formaPago) params.set("forma_pago", formaPago);
-    const queryString = params.toString();
-    const url = `/caja/${restaurante.slug}/imprimir/${facturaId}${
-      queryString ? `?${queryString}` : ""
-    }`;
+    const url = `/caja/${restaurante.slug}/imprimir/${facturaId}`;
     window.open(url, "_blank", "width=400,height=600");
   };
 
@@ -478,20 +472,20 @@ export default function CajaDashboard({
   }
 };
 
-  const handleVerCuentaPDF = async (factura: Factura) => {
+  const handleVerCuentaPDF = (factura: Factura) => {
     const doc = new jsPDF({
       unit: "mm",
       format: [80, 200],
     });
-    const pdfFont = await registerRobotoMono(doc);
     const fecha = format(new Date(factura.created_at), "dd/MM/yyyy HH:mm");
     const mesa = factura.mesas?.numero_mesa ?? "S/N";
     const pedido = factura.numero_pedido_amigable ?? "S/N";
+    const valorDescuento = Number(factura.valor_descuento ?? 0);
 
     doc.setTextColor(0, 0, 0);
     doc.setDrawColor(0, 0, 0);
     doc.setFontSize(10);
-    doc.setFont(pdfFont, "bold");
+    doc.setFont("helvetica", "bold");
     doc.text(restaurante.nombre.toUpperCase(), 40, 10, { align: "center" });
 
     doc.setFontSize(9);
@@ -500,7 +494,7 @@ export default function CajaDashboard({
     doc.line(5, 20, 75, 20);
 
     doc.setFontSize(8);
-    doc.setFont(pdfFont, "normal");
+    doc.setFont("helvetica", "normal");
     doc.text(`Mesa: ${mesa}`, 5, 26);
     doc.text(`Pedido: #${pedido}`, 5, 31);
     doc.text(`Fecha: ${fecha}`, 5, 36);
@@ -533,7 +527,6 @@ export default function CajaDashboard({
         fontSize: 7,
         cellPadding: 1,
         lineColor: [0, 0, 0],
-        font: pdfFont,
       },
       columnStyles: {
         0: { halign: "center", cellWidth: 10 },
@@ -545,18 +538,26 @@ export default function CajaDashboard({
 
     const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } })
       .lastAutoTable?.finalY ?? 70;
+    const totalY = finalY + (valorDescuento > 0 ? 17 : 11);
+    const footerY = finalY + (valorDescuento > 0 ? 28 : 22);
 
     doc.line(5, finalY + 4, 75, finalY + 4);
     doc.setFontSize(10);
-    doc.setFont(pdfFont, "bold");
-    doc.text("TOTAL", 5, finalY + 11);
-    doc.text(`L. ${factura.total.toFixed(2)}`, 75, finalY + 11, {
+    doc.setFont("helvetica", "bold");
+    if (valorDescuento > 0) {
+      doc.text("DESCUENTO", 5, finalY + 11);
+      doc.text(`- L. ${valorDescuento.toFixed(2)}`, 75, finalY + 11, {
+        align: "right",
+      });
+    }
+    doc.text("TOTAL", 5, totalY);
+    doc.text(`L. ${factura.total.toFixed(2)}`, 75, totalY, {
       align: "right",
     });
 
     doc.setFontSize(7);
-    doc.setFont(pdfFont, "normal");
-    doc.text("Resumen de consumo. No es factura fiscal.", 40, finalY + 22, {
+    doc.setFont("helvetica", "normal");
+    doc.text("Resumen de consumo. No es factura fiscal.", 40, footerY, {
       align: "center",
     });
 
@@ -771,12 +772,6 @@ const handleIrACierre = async () => {
                   </span>
                 </div>
               ))}
-              {Number(fac.valor_descuento ?? 0) > 0 && (
-                <div className="flex justify-between pt-2 text-sm font-black text-yellow-300">
-                  <span>Descuento aplicado</span>
-                  <span>- L. {Number(fac.valor_descuento ?? 0).toFixed(2)}</span>
-                </div>
-              )}
             </div>
 
             <div className="border-t border-slate-700 pt-4 mb-4 text-right text-2xl font-black text-orange-500">
