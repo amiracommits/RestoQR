@@ -30,7 +30,7 @@ export default async function CajaPage({
     .from("facturas")
     .select(`
       *,
-      mesas (id, numero_mesa),
+      mesas (id, numero_mesa, localidades (nombre)),
       detalle_facturas (
         id,
         producto_id,

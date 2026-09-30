@@ -247,8 +247,10 @@ git merge dev
 git push origin main
 
 
-
 usuario de conta
 conta@comandix.club
 honduras2026
 
+
+
+id restaurante '969435c5-b28d-43a6-8b4a-8eef93eb884d'

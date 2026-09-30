@@ -23,6 +23,7 @@ export interface Factura {
   mesas: {
     id: string;
     numero_mesa: string;
+    localidades?: { nombre: string } | { nombre: string }[] | null;
   };
   detalle_facturas: DetalleFactura[];
 }

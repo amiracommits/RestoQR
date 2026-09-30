@@ -56,7 +56,7 @@ export default async function DinPage() {
       numero_pedido_amigable,
       created_at,
       mesa_id,
-      mesas (id, numero_mesa),
+      mesas (id, numero_mesa, localidades (nombre)),
       detalle_facturas (
         id,
         cantidad,
@@ -76,7 +76,7 @@ export default async function DinPage() {
 
   const { data: mesasData, error: mesasError } = await supabase
     .from("mesas")
-    .select("id, numero_mesa, estado")
+    .select("id, numero_mesa, estado, localidades (nombre)")
     .eq("restaurante_id", perfil.restaurante_id)
     .order("numero_mesa");
 

@@ -753,9 +753,16 @@ const handleIrACierre = async () => {
             className="bg-slate-800 rounded-3xl border-2 border-slate-700 p-5 flex flex-col shadow-xl"
           >
             <div className="flex justify-between items-start mb-4">
-              <span className="text-2xl font-black text-white">
-                MESA {fac.mesas?.numero_mesa}
-              </span>
+              <div className="flex min-w-0 flex-col items-start gap-2">
+                <span className="text-2xl font-black text-white">
+                  MESA {fac.mesas?.numero_mesa}
+                </span>
+                <span className="max-w-full break-words rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-xs font-bold text-orange-300">
+                  {(Array.isArray(fac.mesas?.localidades)
+                    ? fac.mesas.localidades[0]?.nombre
+                    : fac.mesas?.localidades?.nombre) || "Sin localidad"}
+                </span>
+              </div>
               <span className="text-3xl font-black text-white">
                 #{fac.numero_pedido_amigable}
               </span>
