@@ -14,10 +14,16 @@ export default async function PaginaImpresion({
   searchParams,
 }: {
   params: Promise<{ slug: string; id: string }>;
-  searchParams: Promise<{ forma_pago?: string }>;
+  searchParams: Promise<{
+    forma_pago?: string;
+    pago_efectivo?: string;
+    pago_tarjeta?: string;
+    pago_transferencia?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { forma_pago } = await searchParams;
+  const parametros = await searchParams;
+  const { forma_pago } = parametros;
   const supabase = await createClient();
 
   // 1. Traemos la factura con la nueva metadata tributaria de la DEI
@@ -61,12 +67,17 @@ export default async function PaginaImpresion({
   const impuestoTotal = impuestoNormal + impuestoEspecial;
   const subtotalSinImpuesto = Number(factura.total ?? 0) - impuestoTotal;
   const valorDescuento = Number(factura.valor_descuento ?? 0);
-  const formaPagoParam = ["efectivo", "tarjeta", "transferencia"].includes(
+  const formaPagoParam = ["efectivo", "tarjeta", "transferencia", "mixto"].includes(
     String(forma_pago ?? "").toLowerCase(),
   )
     ? String(forma_pago).toLowerCase()
     : null;
-  const formaPagoFinal = factura.forma_pago || formaPagoParam;
+  const usarSeleccionActual = factura.estado === "generada" && !!formaPagoParam;
+  const formaPagoFinal = usarSeleccionActual ? formaPagoParam : factura.forma_pago || formaPagoParam;
+  const obtenerMontoPago = (campo: "pago_efectivo" | "pago_tarjeta" | "pago_transferencia") => {
+    const monto = Number((usarSeleccionActual ? parametros[campo] : factura[campo]) ?? 0);
+    return Number.isFinite(monto) && monto >= 0 ? monto.toFixed(2) : "0.00";
+  };
   const formaPago = formaPagoFinal
     ? String(formaPagoFinal).replace(/_/g, " ").toUpperCase()
     : "NO DEFINIDA";
@@ -145,6 +156,13 @@ export default async function PaginaImpresion({
           <p>FECHA: {new Date(factura.created_at).toLocaleString('es-HN')}</p>
           <p>MESA: {factura.mesas?.numero_mesa}</p>
           <p>FORMA DE PAGO: {formaPago}</p>
+          {formaPagoFinal === "mixto" && (
+            <div className="flex flex-nowrap justify-between gap-1 whitespace-nowrap text-[8px] tabular-nums">
+              <span>Efectivo: L. {obtenerMontoPago("pago_efectivo")}</span>
+              <span>Tarjeta: L. {obtenerMontoPago("pago_tarjeta")}</span>
+              <span>Transf.: L. {obtenerMontoPago("pago_transferencia")}</span>
+            </div>
+          )}
           <p className="uppercase">CLIENTE: {factura.nombre_cliente || 'CLIENTE FINAL'}</p>
           {factura.rtn_cliente && <p>RTN CLIENTE: {factura.rtn_cliente}</p>}
         </div>

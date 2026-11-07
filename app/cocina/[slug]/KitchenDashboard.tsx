@@ -46,6 +46,8 @@ export default function KitchenDashboard({
   pedidosIniciales,
 }: CocinaDashboardProps) {
   const [pedidos, setPedidos] = useState(pedidosIniciales);
+  const [pedidosProcesando, setPedidosProcesando] = useState<Record<string, boolean>>({});
+  const [errorEntrega, setErrorEntrega] = useState<string | null>(null);
   //const [ahora, setAhora] = useState(Date.now()) // Estado para el "reloj" interno
   const [ahora, setAhora] = useState(() => Date.now());
   const router = useRouter();
@@ -300,6 +302,8 @@ export default function KitchenDashboard({
   };
 
   const completarPedido = async (pedido: Pedido) => {
+    if (pedidosProcesando[pedido.id]) return;
+    setErrorEntrega(null);
     const comandaGenerada = comandasGeneradas[pedido.id] === true;
 
     if (!comandaGenerada) {
@@ -323,29 +327,46 @@ export default function KitchenDashboard({
       return;
     }
 
-    const pedidosPrevios = [...pedidos];
+    setPedidosProcesando((prev) => ({ ...prev, [pedido.id]: true }));
+    try {
+      const { error: rpcError } = await supabase.rpc("procesar_entrega_pedido", {
+        target_pedido_id: pedido.id,
+      });
+      if (rpcError) throw new Error(rpcError.message);
 
-    // Update optimista en UI
-    setPedidos(pedidos.filter((p) => p.id !== pedido.id));
+      // Un RPC sin error no garantiza que haya creado o asociado la factura.
+      const { data: pedidoActual, error: pedidoError } = await supabase
+        .from("pedidos").select("estado, factura_id")
+        .eq("id", pedido.id).single();
+      if (pedidoError) throw new Error(`No se pudo verificar el pedido: ${pedidoError.message}`);
+      if (!pedidoActual.factura_id) {
+        throw new Error("El procesamiento terminó sin asociar una factura al pedido. Revisa la función procesar_entrega_pedido en Supabase.");
+      }
+      const { data: factura, error: facturaError } = await supabase
+        .from("facturas").select("id")
+        .eq("id", pedidoActual.factura_id).single();
+      if (facturaError || !factura) {
+        throw new Error(`No se pudo verificar la factura asociada: ${facturaError?.message ?? "factura no encontrada"}`);
+      }
+      if (pedidoActual.estado === "pendiente") {
+        throw new Error("El pedido continúa pendiente después de procesar la entrega. Revisa procesar_entrega_pedido en Supabase.");
+      }
 
-    // ÚNICA LLAMADA: El RPC orquesta todo
-    const { error: rpcError } = await supabase.rpc("procesar_entrega_pedido", {
-      target_pedido_id: pedido.id,
-    });
-
-    if (rpcError) {
-      console.error("Error crítico en RPC:", rpcError.message);
-      setPedidos(pedidosPrevios); // Rollback visual
-      alert(`Error: ${rpcError.message}`);
-      return;
+      setPedidos((prev) => prev.filter((p) => p.id !== pedido.id));
+      setComandasGeneradas((prev) => {
+        const copia = { ...prev };
+        delete copia[pedido.id];
+        return copia;
+      });
+      router.refresh();
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : "No se pudo completar el pedido.";
+      console.error("Error completando pedido", { pedidoId: pedido.id, error });
+      setErrorEntrega(`Pedido #${pedido.numero_pedido_dia ?? pedido.id}: ${mensaje}`);
+      // No reintentar automáticamente: el RPC pudo haber realizado cambios.
+    } finally {
+      setPedidosProcesando((prev) => ({ ...prev, [pedido.id]: false }));
     }
-
-    setComandasGeneradas((prev) => {
-      const copia = { ...prev };
-      delete copia[pedido.id];
-      return copia;
-    });
-    router.refresh();
   };
 
   useEffect(() => {
@@ -392,6 +413,12 @@ export default function KitchenDashboard({
           </button>
         </div>
       </header>
+
+      {errorEntrega && (
+        <div role="alert" className="mb-5 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm font-semibold text-red-200">
+          {errorEntrega}
+        </div>
+      )}
 
       {pedidos.length === 0 ? (
         <section className="flex min-h-[55vh] items-center justify-center">
@@ -506,9 +533,10 @@ export default function KitchenDashboard({
                   <button
                     type="button"
                     onClick={() => completarPedido(pedido)}
+                    disabled={pedidosProcesando[pedido.id]}
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-900/20"
                   >
-                    MARCAR COMPLETADO
+                    {pedidosProcesando[pedido.id] ? "PROCESANDO..." : "MARCAR COMPLETADO"}
                   </button>
                 </div>
               </div>

@@ -16,7 +16,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 
-type FormaPago = "efectivo" | "tarjeta" | "transferencia";
+type FormaPago = "efectivo" | "tarjeta" | "transferencia" | "mixto";
 
 export default function CajaDashboard({
   restaurante,
@@ -42,6 +42,20 @@ export default function CajaDashboard({
   //estado para bloquear cierre mientras ejecuta
   const [validandoCierre, setValidandoCierre] = useState(false);
   const [formaPago, setFormaPago] = useState<FormaPago | "">("");
+  const [pagosMixtos, setPagosMixtos] = useState({
+    pago_efectivo: "0", pago_tarjeta: "0", pago_transferencia: "0",
+  });
+  const totalPagosCentavos = Object.values(pagosMixtos).reduce(
+    (total, valor) => total + Math.round(Number(valor || 0) * 100), 0,
+  );
+  const errorPagoMixto = formaPago !== "mixto" ? null
+    : Object.values(pagosMixtos).some((valor) =>
+        !Number.isFinite(Number(valor)) || Number(valor) < 0 ||
+        !/^\d*(\.\d{0,2})?$/.test(valor))
+      ? "Ingresa montos válidos, no negativos y con máximo dos decimales."
+      : totalPagosCentavos > Math.round(Number(facturaParaCobrar?.total ?? 0) * 100)
+        ? "La suma de los pagos no puede superar el total de la factura."
+        : null;
   const [mostrarDniSenior, setMostrarDniSenior] = useState(false);
   const [dniSenior, setDniSenior] = useState("");
   const [descuentosSeniorAplicados, setDescuentosSeniorAplicados] = useState<
@@ -128,12 +142,21 @@ export default function CajaDashboard({
       alert("Selecciona una forma de pago antes de confirmar.");
       return;
     }
+    if (errorPagoMixto) {
+      alert(errorPagoMixto);
+      return;
+    }
     setProcesando(true);
     try {
       const result = await finalizarPedidoCompleto(
         facturaParaCobrar.id,
         restaurante.slug,
-        formaPago as FormaPago,
+        formaPago,
+        formaPago === "mixto" ? {
+          pago_efectivo: Number(pagosMixtos.pago_efectivo || 0),
+          pago_tarjeta: Number(pagosMixtos.pago_tarjeta || 0),
+          pago_transferencia: Number(pagosMixtos.pago_transferencia || 0),
+        } : undefined,
       );
 
       if (result.success) {
@@ -229,7 +252,13 @@ export default function CajaDashboard({
 
   const handleGenerarFactura = (facturaId: string) => {
     // Abrimos la ruta de impresión en una pestaña nueva
-    const url = `/caja/${restaurante.slug}/imprimir/${facturaId}`;
+    const parametros = new URLSearchParams({ forma_pago: formaPago });
+    if (formaPago === "mixto") {
+      Object.entries(pagosMixtos).forEach(([campo, valor]) => {
+        parametros.set(campo, Number(valor || 0).toFixed(2));
+      });
+    }
+    const url = `/caja/${restaurante.slug}/imprimir/${facturaId}?${parametros.toString()}`;
     window.open(url, "_blank", "width=400,height=600");
   };
 
@@ -567,7 +596,7 @@ export default function CajaDashboard({
 
 
   const handleImprimirYHabilitarCierre = async () => {
-  if (!facturaParaCobrar) return
+  if (!facturaParaCobrar || errorPagoMixto) return
 
   try {
     await handleGenerarFactura(facturaParaCobrar.id)
@@ -790,6 +819,7 @@ const handleIrACierre = async () => {
                 () => {
                   setImpresionConfirmada(false)
                   setFormaPago("")
+                  setPagosMixtos({ pago_efectivo: "0", pago_tarjeta: "0", pago_transferencia: "0" })
                   setMostrarDniSenior(false)
                   setDniSenior("")
                   setMensajeDescuentoSenior(null)
@@ -829,7 +859,7 @@ const handleIrACierre = async () => {
 {facturaParaCobrar && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm print:hidden">
     {/* Contenedor relativo para posicionar la X */}
-    <div className="relative bg-white w-[300px] p-6 shadow-2xl rounded-xl">
+    <div className="relative bg-white w-[340px] max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto p-6 shadow-2xl rounded-xl">
       
       {/* ❌ BOTÓN CERRAR (La X flotante) */}
       <button 
@@ -837,6 +867,7 @@ const handleIrACierre = async () => {
         setFacturaParaCobrar(null)
         setImpresionConfirmada(false)
         setFormaPago("")
+                  setPagosMixtos({ pago_efectivo: "0", pago_tarjeta: "0", pago_transferencia: "0" })
         setMostrarDniSenior(false)
         setDniSenior("")
         setMensajeDescuentoSenior(null)
@@ -875,19 +906,51 @@ const handleIrACierre = async () => {
         </label>
         <select
         value={formaPago}
-        onChange={(e) => setFormaPago(e.target.value as FormaPago | "")}
+        onChange={(e) => {
+          setFormaPago(e.target.value as FormaPago | "");
+          setImpresionConfirmada(false);
+        }}
         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
       >
         <option value="">Seleccionar</option>
         <option value="efectivo">Efectivo</option>
         <option value="tarjeta">Tarjeta</option>
         <option value="transferencia">Transferencia bancaria</option>
+        <option value="mixto">Pago mixto</option>
       </select>
+        {formaPago === "mixto" && (
+          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-900">
+            {([
+              ["pago_efectivo", "Efectivo"],
+              ["pago_tarjeta", "Tarjeta"],
+              ["pago_transferencia", "Transferencia bancaria"],
+            ] as const).map(([campo, etiqueta]) => (
+              <label key={campo} className="block text-xs font-bold">
+                {etiqueta} (L.)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  max={Number(facturaParaCobrar.total ?? 0)}
+                  value={pagosMixtos[campo]}
+                  onChange={(event) => {
+                    setPagosMixtos((prev) => ({ ...prev, [campo]: event.target.value }));
+                    setImpresionConfirmada(false);
+                  }}
+                  onBlur={() => setPagosMixtos((prev) => ({ ...prev, [campo]: prev[campo] || "0" }))}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+            ))}
+            <p className="text-xs font-bold">Total ingresado: L. {(totalPagosCentavos / 100).toFixed(2)}</p>
+            {errorPagoMixto && <p role="alert" className="text-xs font-bold text-red-700">{errorPagoMixto}</p>}
+          </div>
+        )}
         <button
           onClick={handleImprimirYHabilitarCierre}
-          disabled={!formaPago}
+          disabled={!formaPago || !!errorPagoMixto}
           className={`w-full font-bold py-3 rounded-lg text-white ${
-            !formaPago
+            !formaPago || !!errorPagoMixto
               ? "bg-slate-700/60 cursor-not-allowed"
               : "bg-slate-900 hover:bg-slate-800"
           }`}
@@ -973,9 +1036,9 @@ const handleIrACierre = async () => {
 
         <button
           onClick={handleConfirmarPago}
-          disabled={procesando || !impresionConfirmada || !formaPago}
+          disabled={procesando || !impresionConfirmada || !formaPago || !!errorPagoMixto}
           className={`w-full font-bold py-3 rounded-lg text-white ${
-            procesando || !impresionConfirmada || !formaPago
+            procesando || !impresionConfirmada || !formaPago || !!errorPagoMixto
               ? 'bg-emerald-600/50 cursor-not-allowed'
               : 'bg-emerald-600 hover:bg-emerald-700'
           }`}

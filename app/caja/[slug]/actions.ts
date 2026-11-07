@@ -12,18 +12,43 @@ import { redirect } from "next/navigation";
 export async function finalizarPedidoCompleto(
   facturaId: string,
   slug: string,
-  formaPago: "efectivo" | "tarjeta" | "transferencia",
+  formaPago: "efectivo" | "tarjeta" | "transferencia" | "mixto",
+  pagosMixtos?: { pago_efectivo: number; pago_tarjeta: number; pago_transferencia: number },
 ) {
   const supabase = await createClient();
 
 
 
 
-  //  Cerrar cuenta (RPC)
-const { error } = await supabase.rpc("finalizar_cuenta_mesa", {
-  target_factura_id: facturaId,
-  p_forma_pago: formaPago,
-});
+  if (!["efectivo", "tarjeta", "transferencia", "mixto"].includes(formaPago)) {
+    return { success: false, error: "Forma de pago inválida." };
+  }
+  const { data: factura, error: consultaError } = await supabase
+    .from("facturas").select("total, estado").eq("id", facturaId).single();
+  if (consultaError || !factura || factura.estado !== "generada") {
+    return { success: false, error: "La factura no está disponible para cobrar." };
+  }
+  const total = Number(factura.total ?? 0);
+  const pagos = formaPago === "mixto" ? pagosMixtos : {
+    pago_efectivo: formaPago === "efectivo" ? total : 0,
+    pago_tarjeta: formaPago === "tarjeta" ? total : 0,
+    pago_transferencia: formaPago === "transferencia" ? total : 0,
+  };
+  const montos = pagos && [pagos.pago_efectivo, pagos.pago_tarjeta, pagos.pago_transferencia];
+  if (!montos || montos.some((monto) =>
+    typeof monto !== "number" || !Number.isFinite(monto) || monto < 0 ||
+    Math.abs(monto * 100 - Math.round(monto * 100)) > 0.000001
+  ) || montos.reduce((suma, monto) => suma + Math.round(monto * 100), 0) > Math.round(total * 100)) {
+    return { success: false, error: "Los montos deben ser no negativos, tener máximo dos decimales y no superar el total de la factura." };
+  }
+  // El RPC guarda el desglose y finaliza el cobro en una sola transacción.
+  const { error } = await supabase.rpc("finalizar_cuenta_mesa", {
+    target_factura_id: facturaId,
+    p_forma_pago: formaPago,
+    p_pago_efectivo: pagos!.pago_efectivo,
+    p_pago_tarjeta: pagos!.pago_tarjeta,
+    p_pago_transferencia: pagos!.pago_transferencia,
+  });
 
   if (error) {
     console.error("❌ Error al ejecutar RPC finalizar_cuenta_mesa:", error.message);
