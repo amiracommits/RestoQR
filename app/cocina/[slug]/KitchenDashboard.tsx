@@ -12,7 +12,7 @@ interface DetallePedido {
   cantidad: number;
   precio: number;
   notas?: string;
-  productos: { nombre: string };
+  productos: { nombre: string; bar_only?: boolean | null } | null;
 }
 
 interface Pedido {
@@ -22,6 +22,8 @@ interface Pedido {
   estado: string;
   es_adicional: boolean;
   mesa_id: string;
+  usuario_id?: string | null;
+  usuario_nombre?: string | null;
   numero_pedido_dia?: number | null; // 👈 para numero de pedido
   tipo_pedido?: "bar" | "cocina" | string | null;
   mesas: { numero_mesa: string };
@@ -53,7 +55,7 @@ export default function KitchenDashboard({
   const router = useRouter();
   const supabase = createClient();
   const [mounted, setMounted] = useState(false);
-  const [comandasGeneradas, setComandasGeneradas] = useState<Record<string, boolean>>({});
+  const [comandasCocinaGeneradas, setComandasCocinaGeneradas] = useState<Record<string, boolean>>({});
   const [mensajeCajaCerrada, setMensajeCajaCerrada] = useState<string | null>(
     null,
   );
@@ -160,107 +162,127 @@ export default function KitchenDashboard({
     return data?.is_caja_abierta === true;
   };
 
-  const handleGenerarComanda = async (pedido: Pedido) => {
-    const previewWindow = window.open("", "_blank");
-    const doc = new jsPDF({
-      unit: "mm",
-      format: [80, 220],
-    });
-    const pdfFont = await registerRobotoMono(doc);
-
-    let y = 8;
-    const pageWidth = 80;
-    const marginX = 6;
-    const contentWidth = pageWidth - marginX * 2;
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFont(pdfFont, "bold");
-    doc.setFontSize(11);
-    doc.text(restaurante.nombre.toUpperCase(), pageWidth / 2, y, {
-      align: "center",
-      maxWidth: contentWidth,
-    });
-
-    y += 6;
-    doc.setFontSize(10);
-    doc.text("COMANDA DE COCINA", pageWidth / 2, y, { align: "center" });
-
-    y += 5;
-    doc.setLineWidth(0.2);
-    doc.line(marginX, y, pageWidth - marginX, y);
-
-    y += 6;
-    doc.setFontSize(9);
-    doc.text(`Mesa: ${pedido.mesas?.numero_mesa || "S/N"}`, marginX, y);
-    y += 5;
-    doc.text(`Pedido: #${pedido.numero_pedido_dia ?? "S/N"}`, marginX, y);
-    y += 5;
-    doc.text(
-      `Tipo: ${pedido.es_adicional ? "ADICIONAL" : "PRINCIPAL"}`,
-      marginX,
-      y,
+  const handleGenerarComanda = async (pedido: Pedido, destino: "cocina" | "bar") => {
+    const detalles = pedido.detalle_pedidos.filter((detalle) =>
+      destino === "bar" ? detalle.productos?.bar_only === true : detalle.productos?.bar_only !== true,
     );
-    y += 5;
-    doc.setFont(pdfFont, "normal");
-    doc.text(
-      `Hora: ${new Date(pedido.created_at).toLocaleString("es-HN")}`,
-      marginX,
-      y,
-    );
-
-    y += 6;
-    doc.line(marginX, y, pageWidth - marginX, y);
-    y += 6;
-
-    pedido.detalle_pedidos?.forEach((detalle, index) => {
-      if (y > 205) {
-        doc.addPage([80, 220]);
-        y = 8;
-      }
-
-      doc.setFont(pdfFont, "bold");
-      doc.setFontSize(10);
-      const producto = `${index + 1}. ${detalle.cantidad}x ${
-        detalle.productos?.nombre || "Producto"
-      }`;
-      const productoLineas = doc.splitTextToSize(producto, contentWidth);
-      doc.text(productoLineas, marginX, y);
-      y += productoLineas.length * 5;
-
-      if (detalle.notas) {
-        doc.setFont(pdfFont, "normal");
-        doc.setFontSize(8);
-        const notaLineas = doc.splitTextToSize(
-          `Nota: ${detalle.notas}`,
-          contentWidth - 4,
-        );
-        doc.text(notaLineas, marginX + 4, y);
-        y += notaLineas.length * 4;
-      }
-
-      y += 3;
-    });
-
-    doc.line(marginX, y, pageWidth - marginX, y);
-    y += 6;
-    doc.setFont(pdfFont, "bold");
-    doc.setFontSize(9);
-    doc.text("Preparar segun detalle.", pageWidth / 2, y, {
-      align: "center",
-    });
-
-    const pdfUrl = doc.output("bloburl").toString();
-
-    if (previewWindow) {
-      previewWindow.location.href = pdfUrl;
-    } else {
-      window.open(pdfUrl, "_blank");
+    if (detalles.length === 0) {
+      alert(`Este pedido no tiene productos para ${destino === "bar" ? "bar" : "cocina"}.`);
+      return;
     }
+    const previewWindow = window.open("", "_blank");
+    if (!previewWindow) {
+      alert("Permite las ventanas emergentes para abrir la comanda.");
+      return;
+    }
+    try {
+      const doc = new jsPDF({
+        unit: "mm",
+        format: [80, 220],
+      });
+      const pdfFont = await registerRobotoMono(doc);
 
-    setComandasGeneradas((prev) => ({
-      ...prev,
-      [pedido.id]: true,
-    }));
+      let y = 8;
+      const pageWidth = 80;
+      const marginX = 6;
+      const contentWidth = pageWidth - marginX * 2;
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFont(pdfFont, "bold");
+      doc.setFontSize(11);
+      doc.text(restaurante.nombre.toUpperCase(), pageWidth / 2, y, {
+        align: "center",
+        maxWidth: contentWidth,
+      });
+
+      y += 6;
+      doc.setFontSize(10);
+      doc.text(destino === "cocina" ? "COMANDA DE COCINA" : "COMANDA DE BAR", pageWidth / 2, y, { align: "center" });
+
+      y += 5;
+      doc.setLineWidth(0.2);
+      doc.line(marginX, y, pageWidth - marginX, y);
+
+      y += 6;
+      doc.setFontSize(9);
+      doc.text(`Mesa: ${pedido.mesas?.numero_mesa || "S/N"}`, marginX, y);
+      y += 5;
+      doc.text(`Pedido: #${pedido.numero_pedido_dia ?? "S/N"}`, marginX, y);
+      y += 5;
+      doc.text(
+        `Tipo: ${pedido.es_adicional ? "ADICIONAL" : "PRINCIPAL"}`,
+        marginX,
+        y,
+      );
+      y += 5;
+      doc.setFont(pdfFont, "normal");
+      doc.text(
+        `Hora: ${new Date(pedido.created_at).toLocaleString("es-HN")}`,
+        marginX,
+        y,
+      );
+
+      y += 5;
+      const usuarioLineas = doc.splitTextToSize(
+        `Registrado por: ${pedido.usuario_nombre || (pedido.usuario_id ? "Nombre no disponible" : "No registrado")}`,
+        contentWidth,
+      );
+      doc.text(usuarioLineas, marginX, y);
+      y += usuarioLineas.length * 4;
+
+      y += 6;
+      doc.line(marginX, y, pageWidth - marginX, y);
+      y += 6;
+
+      detalles.forEach((detalle, index) => {
+        if (y > 205) {
+          doc.addPage([80, 220]);
+          y = 8;
+        }
+
+        doc.setFont(pdfFont, "bold");
+        doc.setFontSize(10);
+        const producto = `${index + 1}. ${detalle.cantidad}x ${
+          detalle.productos?.nombre || "Producto"
+        }`;
+        const productoLineas = doc.splitTextToSize(producto, contentWidth);
+        doc.text(productoLineas, marginX, y);
+        y += productoLineas.length * 5;
+
+        if (detalle.notas) {
+          doc.setFont(pdfFont, "normal");
+          doc.setFontSize(8);
+          const notaLineas = doc.splitTextToSize(
+            `Nota: ${detalle.notas}`,
+            contentWidth - 4,
+          );
+          doc.text(notaLineas, marginX + 4, y);
+          y += notaLineas.length * 4;
+        }
+
+        y += 3;
+      });
+
+      doc.line(marginX, y, pageWidth - marginX, y);
+      y += 6;
+      doc.setFont(pdfFont, "bold");
+      doc.setFontSize(9);
+      doc.text("Preparar segun detalle.", pageWidth / 2, y, {
+        align: "center",
+      });
+
+      const pdfUrl = doc.output("bloburl").toString();
+
+      previewWindow.location.href = pdfUrl;
+
+      if (destino === "cocina") {
+        setComandasCocinaGeneradas((prev) => ({ ...prev, [pedido.id]: true }));
+      }
+    } catch (error) {
+      previewWindow.close();
+      console.error("Error generando comanda:", error);
+      setErrorEntrega("No se pudo generar la comanda. Intenta nuevamente.");
+    }
   };
 
   /*DEPRECADO <ESTA FUNCION YA NO SE LLAMA DESDE EL BOTON DE COMPLETAR PEDIDO
@@ -304,11 +326,11 @@ export default function KitchenDashboard({
   const completarPedido = async (pedido: Pedido) => {
     if (pedidosProcesando[pedido.id]) return;
     setErrorEntrega(null);
-    const comandaGenerada = comandasGeneradas[pedido.id] === true;
+    const comandaGenerada = comandasCocinaGeneradas[pedido.id] === true;
 
     if (!comandaGenerada) {
       const confirmar = window.confirm(
-        "No se ha generado la comanda para este pedido. Deseas marcarlo como completado de todas formas?",
+        "No se ha generado la comanda para cocina de este pedido. Deseas marcarlo como completado de todas formas?",
       );
 
       if (!confirmar) return;
@@ -353,7 +375,7 @@ export default function KitchenDashboard({
       }
 
       setPedidos((prev) => prev.filter((p) => p.id !== pedido.id));
-      setComandasGeneradas((prev) => {
+      setComandasCocinaGeneradas((prev) => {
         const copia = { ...prev };
         delete copia[pedido.id];
         return copia;
@@ -506,7 +528,7 @@ export default function KitchenDashboard({
                         </span>
                         <div className="flex flex-col flex-1">
                           <span className="text-base font-bold text-slate-200 leading-tight">
-                            {detalle.productos?.nombre}
+                            {detalle.productos?.nombre || "Producto"}
                           </span>
                           {detalle.notas && (
                             <div className="mt-1.5 p-2 bg-slate-900/40 rounded-lg border-l-2 border-orange-500">
@@ -525,10 +547,17 @@ export default function KitchenDashboard({
                 <div className="space-y-3 p-4 bg-slate-900/30">
                   <button
                     type="button"
-                    onClick={() => handleGenerarComanda(pedido)}
+                    onClick={() => handleGenerarComanda(pedido, "cocina")}
                     className="w-full rounded-2xl border border-orange-500/30 bg-orange-500/10 py-4 font-black text-orange-200 shadow-lg shadow-orange-900/10 transition-all hover:bg-orange-500/20 active:scale-95"
                   >
-                    GENERAR COMANDA
+                    👨‍🍳 COMANDA PARA COCINA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerarComanda(pedido, "bar")}
+                    className="w-full rounded-2xl border border-cyan-500/30 bg-cyan-500/10 py-4 font-black text-cyan-200 transition-all hover:bg-cyan-500/20 active:scale-95"
+                  >
+                    🍸 COMANDA PARA BAR
                   </button>
                   <button
                     type="button"

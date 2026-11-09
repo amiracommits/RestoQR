@@ -212,6 +212,15 @@ export default function DinDashboard({
     router.replace("/login");
   };
 
+  const validarUsuarioPedido = async () => {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      throw new Error("Tu sesión expiró. Inicia sesión nuevamente para registrar el pedido.");
+    }
+    // El trigger de pedidos guarda auth.uid() desde la sesión del RPC.
+    // El identificador no se envía desde el navegador.
+  };
+
   const insertarProductos = async () => {
     if (!facturaSeleccionada || productosSeleccionados.length === 0) return;
 
@@ -230,6 +239,8 @@ export default function DinDashboard({
     }));
 
     try {
+      await validarUsuarioPedido();
+
       if (barItems.length > 0) {
         const { error } = await supabase.rpc(
           "agregar_productos_factura_mesero",
@@ -301,6 +312,8 @@ export default function DinDashboard({
     setSuccessMessage(null);
 
     try {
+      await validarUsuarioPedido();
+
       const cajaAbierta = await cajaEstaAbierta();
 
       if (!cajaAbierta) {

@@ -56,18 +56,72 @@ export default async function CocinaPage({
       `
       *,
       mesas(numero_mesa),
-      detalle_pedidos(cantidad, notas, productos(nombre))
+      detalle_pedidos(cantidad, notas, productos(nombre, bar_only))
     `,
     )
     .eq("restaurante_id", restaurante.id)
     .eq("estado", "pendiente")
     .order("created_at", { ascending: true });
 
+  const nombresUsuarios = new Map<string, string>();
+  if ((pedidosIniciales ?? []).length > 0) {
+    // El RPC une pedidos.usuario_id con perfiles_admin.id y valida el
+    // restaurante del solicitante antes de devolver únicamente los nombres.
+    const { data: usuariosPedidos, error: usuariosError } = await supabase.rpc(
+      "obtener_usuarios_comandas",
+      { p_restaurante_id: restaurante.id },
+    );
+    if (usuariosError) {
+      console.error("No se pudieron cargar los usuarios de las comandas:", usuariosError.message);
+    }
+    for (const usuarioPedido of usuariosPedidos ?? []) {
+      if (usuarioPedido.nombre_usuario?.trim()) {
+        nombresUsuarios.set(usuarioPedido.pedido_id, usuarioPedido.nombre_usuario.trim());
+      }
+    }
+  }
+  // Recuperar los autores que el RPC no resolvió, por ejemplo si todavía no
+  // se ha instalado la función SQL. Esta consulta conserva las políticas RLS.
+  const usuariosSinNombre = [
+    ...new Set<string>(
+      (pedidosIniciales ?? [])
+        .filter((pedido) => pedido.usuario_id && !nombresUsuarios.has(pedido.id))
+        .map((pedido) => pedido.usuario_id as string),
+    ),
+  ];
+  if (usuariosSinNombre.length > 0) {
+    const { data: autores, error: autoresError } = await supabase
+      .from("perfiles_admin")
+      .select("id, nombre_usuario")
+      .in("id", usuariosSinNombre);
+
+    if (autoresError) {
+      console.error("No se pudieron consultar los autores de las comandas:", autoresError.message);
+    }
+
+    const nombresPorUsuario = new Map<string, string>();
+    for (const autor of autores ?? []) {
+      if (autor.nombre_usuario?.trim()) {
+        nombresPorUsuario.set(autor.id, autor.nombre_usuario.trim());
+      }
+    }
+    for (const pedido of pedidosIniciales ?? []) {
+      const nombre = nombresPorUsuario.get(pedido.usuario_id);
+      if (!nombresUsuarios.has(pedido.id) && nombre) {
+        nombresUsuarios.set(pedido.id, nombre);
+      }
+    }
+  }
+  const pedidosConUsuario = (pedidosIniciales ?? []).map((pedido) => ({
+    ...pedido,
+    usuario_nombre: nombresUsuarios.get(pedido.id) ?? null,
+  }));
+
   return (
     <main className="min-h-screen bg-[#0F172A] text-white p-6 md:p-10">
       <KitchenDashboard
         restaurante={restaurante}
-        pedidosIniciales={pedidosIniciales || []}
+        pedidosIniciales={pedidosConUsuario}
       />
     </main>
   );
