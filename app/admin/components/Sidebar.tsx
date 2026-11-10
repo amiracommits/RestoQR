@@ -12,6 +12,7 @@ import {
   ShoppingBagIcon,
   ClipboardDocumentListIcon,
   BoltIcon,
+  UsersIcon,
 } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 
@@ -21,6 +22,7 @@ const menuItems = [
   { nombre: 'Facturas', href: '/admin/facturas', icon: DocumentTextIcon },
   { nombre: 'Productos', href: '/admin/productos', icon: ShoppingBagIcon },
   { nombre: 'Categorías', href: '/admin/categorias', icon: FolderIcon },
+  { nombre: 'Usuarios', href: '/admin/usuarios', icon: UsersIcon },
   { nombre: 'Config', href: '/admin/config', icon: Cog6ToothIcon },
 ]
 
