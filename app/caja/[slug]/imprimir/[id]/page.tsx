@@ -38,9 +38,11 @@ export default async function PaginaImpresion({
       total,
       forma_pago,
       valor_descuento,
+      valor_propina,
       numero_pedido_amigable,
       mesas (numero_mesa),
       restaurantes (
+        calcula_propina,
         razon_social,
         rtn,
         direccion,
@@ -65,7 +67,9 @@ export default async function PaginaImpresion({
   const impuestoNormal = Number(factura.impuesto_iva_normal ?? 0);
   const impuestoEspecial = Number(factura.impuesto_iva_especial ?? 0);
   const impuestoTotal = impuestoNormal + impuestoEspecial;
-  const subtotalSinImpuesto = Number(factura.total ?? 0) - impuestoTotal;
+  const valorPropina = Number(factura.valor_propina ?? 0);
+  const mostrarPropina = factura.restaurantes?.calcula_propina === true;
+  const subtotalSinImpuesto = Number(factura.total ?? 0) - impuestoTotal - valorPropina;
   const valorDescuento = Number(factura.valor_descuento ?? 0);
   const etiquetasFormaPago: Record<string, string> = {
     efectivo: "EFECTIVO",
@@ -205,6 +209,13 @@ export default async function PaginaImpresion({
           <span>VALOR ISV ESPECIAL (18%)</span>
           <span>L. {impuestoEspecial.toFixed(2)}</span>
         </div>
+
+        {mostrarPropina && (
+          <div className="flex justify-between text-[11px]">
+            <span>PROPINA VOLUNTARIA</span>
+            <span>L. {valorPropina.toFixed(2)}</span>
+          </div>
+        )}
 
         {valorDescuento > 0 && (
           <div className="flex justify-between text-[11px] font-bold">
