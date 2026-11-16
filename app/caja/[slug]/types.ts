@@ -16,6 +16,7 @@ export interface Factura {
   id: string;
   total: number;
   valor_descuento?: number | null;
+  valor_propina?: number;
   estado: string;
   numero_pedido_amigable: number;
   created_at: string;
@@ -33,6 +34,8 @@ export interface Restaurante {
   nombre: string;
   slug: string;
   is_caja_abierta?: boolean | null;
+  calcula_propina?: boolean;
+  porcentaje_propina?: number;
   logo_url?: string;
 }
 

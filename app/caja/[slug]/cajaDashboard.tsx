@@ -34,6 +34,11 @@ export default function CajaDashboard({
     Record<string, number>
   >({});
   const [procesando, setProcesando] = useState(false);
+  const [propinaEditada, setPropinaEditada] = useState("0");
+  const [guardandoPropina, setGuardandoPropina] = useState(false);
+  const [errorPropina, setErrorPropina] = useState<string | null>(null);
+  const propinaPendiente = facturaParaCobrar !== null &&
+    Number(propinaEditada) !== Number(facturaParaCobrar.valor_propina ?? 0);
   const [dividiendo, setDividiendo] = useState(false);
   const [errorDivision, setErrorDivision] = useState<string | null>(null);
   
@@ -137,7 +142,7 @@ export default function CajaDashboard({
   }, [facturasIniciales]);
 
   const handleConfirmarPago = async () => {
-    if (!facturaParaCobrar) return;
+    if (!facturaParaCobrar || guardandoPropina || propinaPendiente) return;
     if (!formaPago) {
       alert("Selecciona una forma de pago antes de confirmar.");
       return;
@@ -277,8 +282,43 @@ export default function CajaDashboard({
     setErrorDescuentoSenior(null);
   };
 
+  const guardarPropina = async () => {
+    if (!facturaParaCobrar || guardandoPropina) return;
+    if (!/^\d+(\.\d{1,2})?$/.test(propinaEditada) ||
+        !Number.isFinite(Number(propinaEditada)) || Number(propinaEditada) > 99999999.99) {
+      setErrorPropina("Ingresa una propina no negativa con máximo dos decimales.");
+      return;
+    }
+    setGuardandoPropina(true);
+    setErrorPropina(null);
+    try {
+      const { data, error } = await supabase.rpc("modificar_propina_factura", {
+        p_factura_id: facturaParaCobrar.id,
+        p_valor_propina: Number(propinaEditada),
+      });
+      if (error) throw new Error(error.message);
+      const actualizada = data?.[0];
+      if (!actualizada) throw new Error("No se pudo actualizar la propina.");
+      const cambios = {
+        valor_propina: Number(actualizada.valor_propina),
+        total: Number(actualizada.total),
+        valor_descuento: Number(actualizada.valor_descuento),
+      };
+      setFacturaParaCobrar((prev) => prev ? { ...prev, ...cambios } : prev);
+      setFacturas((prev) => prev.map((factura) =>
+        factura.id === facturaParaCobrar.id ? { ...factura, ...cambios } : factura));
+      setPropinaEditada(cambios.valor_propina.toFixed(2));
+      setImpresionConfirmada(false);
+      router.refresh();
+    } catch (error) {
+      setErrorPropina(error instanceof Error ? error.message : "No se pudo actualizar la propina.");
+    } finally {
+      setGuardandoPropina(false);
+    }
+  };
+
   const aplicarDescuentoSenior = async () => {
-    if (!facturaParaCobrar || !formaPago || aplicandoDescuentoSenior) return;
+    if (!facturaParaCobrar || !formaPago || aplicandoDescuentoSenior || guardandoPropina) return;
     if (
       descuentosSeniorAplicados[facturaParaCobrar.id] ||
       Number(facturaParaCobrar.valor_descuento ?? 0) > 0
@@ -501,102 +541,163 @@ export default function CajaDashboard({
   }
 };
 
-  const handleVerCuentaPDF = (factura: Factura) => {
-    const doc = new jsPDF({
-      unit: "mm",
-      format: [80, 200],
-    });
-    const fecha = format(new Date(factura.created_at), "dd/MM/yyyy HH:mm");
-    const mesa = factura.mesas?.numero_mesa ?? "S/N";
-    const pedido = factura.numero_pedido_amigable ?? "S/N";
-    const valorDescuento = Number(factura.valor_descuento ?? 0);
+  const handleVerCuentaPDF = async (facturaSeleccionada: Factura) => {
+    // Abrir antes del await para conservar el permiso de ventanas emergentes.
+    const vistaPrevia = window.open("", "_blank");
+    if (!vistaPrevia) {
+      alert("Permite las ventanas emergentes para ver la precuenta.");
+      return;
+    }
+    try {
+      const [configuracion, cuenta] = await Promise.all([
+        supabase.from("restaurantes")
+          .select("calcula_propina")
+          .eq("id", restaurante.id)
+          .single(),
+        supabase.from("facturas")
+          .select("total, valor_propina, valor_descuento")
+          .eq("id", facturaSeleccionada.id)
+          .eq("restaurante_id", restaurante.id)
+          .single(),
+      ]);
+      if (configuracion.error || !configuracion.data) {
+        throw new Error("No se pudo consultar la configuración de propina del restaurante.");
+      }
+      if (cuenta.error || !cuenta.data) {
+        throw new Error("No se pudieron consultar los importes actuales de la cuenta.");
+      }
+      const factura = { ...facturaSeleccionada, ...cuenta.data };
+      const doc = new jsPDF({
+        unit: "mm",
+        format: [80, 200],
+      });
+      const fecha = format(new Date(factura.created_at), "dd/MM/yyyy HH:mm");
+      const mesa = factura.mesas?.numero_mesa ?? "S/N";
+      const pedido = factura.numero_pedido_amigable ?? "S/N";
+      const valorDescuento = Number(factura.valor_descuento ?? 0);
+      const mostrarPropina = configuracion.data.calcula_propina === true;
+      const valorPropina = Number(factura.valor_propina ?? 0);
 
-    doc.setTextColor(0, 0, 0);
-    doc.setDrawColor(0, 0, 0);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text(restaurante.nombre.toUpperCase(), 40, 10, { align: "center" });
+      doc.setTextColor(0, 0, 0);
+      doc.setDrawColor(0, 0, 0);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text(restaurante.nombre.toUpperCase(), 40, 10, { align: "center" });
 
-    doc.setFontSize(9);
-    doc.text("RESUMEN DE CUENTA", 40, 16, { align: "center" });
+      doc.setFontSize(9);
+      doc.text("RESUMEN DE CUENTA", 40, 16, { align: "center" });
 
-    doc.line(5, 20, 75, 20);
+      doc.line(5, 20, 75, 20);
 
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Mesa: ${mesa}`, 5, 26);
-    doc.text(`Pedido: #${pedido}`, 5, 31);
-    doc.text(`Fecha: ${fecha}`, 5, 36);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Mesa: ${mesa}`, 5, 26);
+      doc.text(`Pedido: #${pedido}`, 5, 31);
+      doc.text(`Fecha: ${fecha}`, 5, 36);
 
-    const filas = factura.detalle_facturas.map((det) => [
-      `${det.cantidad}`,
-      det.productos.nombre,
-      det.precio_unitario.toFixed(2),
-      det.subtotal.toFixed(2),
-    ]);
+      const filas = factura.detalle_facturas.map((det) => [
+        `${det.cantidad}`,
+        det.productos.nombre,
+        det.precio_unitario.toFixed(2),
+        det.subtotal.toFixed(2),
+      ]);
 
-    autoTable(doc, {
-      head: [["Cant.", "Producto", "P/U", "Subt."]],
-      body: filas,
-      startY: 42,
-      margin: { left: 5, right: 5 },
-      tableWidth: 70,
-      theme: "plain",
-      headStyles: {
-        textColor: [0, 0, 0],
-        fillColor: [255, 255, 255],
-        fontStyle: "bold",
-        lineColor: [0, 0, 0],
-        lineWidth: 0.1,
-      },
-      bodyStyles: {
-        textColor: [0, 0, 0],
-      },
-      styles: {
-        fontSize: 7,
-        cellPadding: 1,
-        lineColor: [0, 0, 0],
-      },
-      columnStyles: {
-        0: { halign: "center", cellWidth: 10 },
-        1: { cellWidth: 34 },
-        2: { halign: "right", cellWidth: 13 },
-        3: { halign: "right", cellWidth: 13 },
-      },
-    });
+      autoTable(doc, {
+        head: [["Cant.", "Producto", "P/U", "Subt."]],
+        body: filas,
+        startY: 42,
+        margin: { left: 5, right: 5 },
+        tableWidth: 70,
+        theme: "plain",
+        headStyles: {
+          textColor: [0, 0, 0],
+          fillColor: [255, 255, 255],
+          fontStyle: "bold",
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+        },
+        bodyStyles: {
+          textColor: [0, 0, 0],
+        },
+        styles: {
+          fontSize: 7,
+          cellPadding: 1,
+          lineColor: [0, 0, 0],
+        },
+        columnStyles: {
+          0: { halign: "center", cellWidth: 10 },
+          1: { cellWidth: 34 },
+          2: { halign: "right", cellWidth: 13 },
+          3: { halign: "right", cellWidth: 13 },
+        },
+      });
 
-    const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } })
-      .lastAutoTable?.finalY ?? 70;
-    const totalY = finalY + (valorDescuento > 0 ? 17 : 11);
-    const footerY = finalY + (valorDescuento > 0 ? 28 : 22);
+      const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } })
+        .lastAutoTable?.finalY ?? 70;
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      const leyenda: string[] = mostrarPropina ? doc.splitTextToSize(
+        "La propina es voluntaria y no obligatoria. Puedes cambiar el monto sugerido o elegir no pagarla.",
+        70,
+      ) : [];
+      const altoResumen = 22 + (valorDescuento > 0 ? 6 : 0) +
+        (mostrarPropina ? 19 + leyenda.length * 3 : 0);
+      let resumenY = finalY;
+      if (resumenY + altoResumen > doc.internal.pageSize.getHeight() - 5) {
+        doc.addPage();
+        resumenY = 5;
+      }
 
-    doc.line(5, finalY + 4, 75, finalY + 4);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    if (valorDescuento > 0) {
-      doc.text("DESCUENTO", 5, finalY + 11);
-      doc.text(`- L. ${valorDescuento.toFixed(2)}`, 75, finalY + 11, {
+      doc.line(5, resumenY + 4, 75, resumenY + 4);
+      let filaY = resumenY + 11;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      if (valorDescuento > 0) {
+        doc.text("DESCUENTO", 5, filaY);
+        doc.text(`- L. ${valorDescuento.toFixed(2)}`, 75, filaY, {
+          align: "right",
+        });
+        filaY += 6;
+      }
+      if (mostrarPropina) {
+        doc.setFontSize(8);
+        doc.text("TOTAL SIN PROPINA", 5, filaY);
+        doc.text(`L. ${(Number(factura.total) - valorPropina).toFixed(2)}`, 75, filaY, {
+          align: "right",
+        });
+        filaY += 6;
+        doc.text("PROPINA SUGERIDA", 5, filaY);
+        doc.text(`L. ${valorPropina.toFixed(2)}`, 75, filaY, { align: "right" });
+        filaY += 6;
+        doc.setFontSize(10);
+      }
+      doc.text("TOTAL", 5, filaY);
+      doc.text(`L. ${factura.total.toFixed(2)}`, 75, filaY, {
         align: "right",
       });
+
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      if (mostrarPropina) {
+        filaY += 7;
+        doc.text(leyenda, 40, filaY, { align: "center" });
+        filaY += leyenda.length * 3;
+      }
+      doc.text("Resumen de consumo. No es factura fiscal.", 40, filaY + 11, {
+        align: "center",
+      });
+
+      const pdfUrl = doc.output("bloburl");
+      vistaPrevia.location.href = String(pdfUrl);
+    } catch (error) {
+      vistaPrevia.close();
+      alert(error instanceof Error ? error.message : "No se pudo generar la precuenta.");
     }
-    doc.text("TOTAL", 5, totalY);
-    doc.text(`L. ${factura.total.toFixed(2)}`, 75, totalY, {
-      align: "right",
-    });
-
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
-    doc.text("Resumen de consumo. No es factura fiscal.", 40, footerY, {
-      align: "center",
-    });
-
-    const pdfUrl = doc.output("bloburl");
-    window.open(pdfUrl, "_blank");
   };
 
 
   const handleImprimirYHabilitarCierre = async () => {
-  if (!facturaParaCobrar || errorPagoMixto) return
+  if (!facturaParaCobrar || errorPagoMixto || guardandoPropina || propinaPendiente) return
 
   try {
     await handleGenerarFactura(facturaParaCobrar.id)
@@ -776,7 +877,11 @@ const handleIrACierre = async () => {
         </section>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 print:hidden">
-          {facturas.map((fac: Factura) => (
+          {facturas.map((fac: Factura) => {
+            // El RPC guarda la propina y ya la incluye en fac.total.
+            const valorPropina = Number(fac.valor_propina ?? 0);
+
+            return (
           <div
             key={fac.id}
             className="bg-slate-800 rounded-3xl border-2 border-slate-700 p-5 flex flex-col shadow-xl"
@@ -808,6 +913,12 @@ const handleIrACierre = async () => {
                   </span>
                 </div>
               ))}
+              {valorPropina > 0 && (
+                <div className="flex justify-between gap-2 text-sm font-bold text-yellow-400">
+                  <span>Propina</span>
+                  <span>L. {valorPropina.toFixed(2)}</span>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-slate-700 pt-4 mb-4 text-right text-2xl font-black text-orange-500">
@@ -831,6 +942,8 @@ const handleIrACierre = async () => {
                     }))
                   }
                   setFacturaParaCobrar(fac)
+                  setPropinaEditada(Number(fac.valor_propina ?? 0).toFixed(2))
+                  setErrorPropina(null)
                 }   
               }
               className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-3 rounded-xl transition-all uppercase tracking-widest text-xs"
@@ -851,7 +964,8 @@ const handleIrACierre = async () => {
               Dividir Factura
             </button>
           </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -863,6 +977,7 @@ const handleIrACierre = async () => {
       
       {/* ❌ BOTÓN CERRAR (La X flotante) */}
       <button 
+        disabled={guardandoPropina}
         onClick={() => {
         setFacturaParaCobrar(null)
         setImpresionConfirmada(false)
@@ -901,6 +1016,33 @@ const handleIrACierre = async () => {
       </div>
 
       <div className="mt-6 flex flex-col gap-2">
+        <label className="text-xs font-bold text-slate-700">
+          Propina (L.)
+          <input
+            type="number"
+            min="0"
+            max="99999999.99"
+            step="0.01"
+            value={propinaEditada}
+            disabled={guardandoPropina || procesando || aplicandoDescuentoSenior}
+            onChange={(event) => {
+              setPropinaEditada(event.target.value);
+              setErrorPropina(null);
+              setImpresionConfirmada(false);
+            }}
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+          />
+        </label>
+        <p className="text-xs text-slate-600">Ingresa 0 si el cliente no desea pagar propina.</p>
+        <button
+          type="button"
+          onClick={guardarPropina}
+          disabled={guardandoPropina || procesando || aplicandoDescuentoSenior || !propinaPendiente}
+          className="rounded-lg bg-sky-700 py-2 text-sm font-bold text-white disabled:opacity-50"
+        >
+          {guardandoPropina ? "Guardando..." : "Guardar propina"}
+        </button>
+        {errorPropina && <p role="alert" className="text-xs font-bold text-red-700">{errorPropina}</p>}
         <label className="text-[11px] font-bold uppercase text-slate-700">
           Forma de pago
         </label>
@@ -948,9 +1090,9 @@ const handleIrACierre = async () => {
         )}
         <button
           onClick={handleImprimirYHabilitarCierre}
-          disabled={!formaPago || !!errorPagoMixto}
+          disabled={!formaPago || !!errorPagoMixto || guardandoPropina || propinaPendiente}
           className={`w-full font-bold py-3 rounded-lg text-white ${
-            !formaPago || !!errorPagoMixto
+            !formaPago || !!errorPagoMixto || guardandoPropina || propinaPendiente
               ? "bg-slate-700/60 cursor-not-allowed"
               : "bg-slate-900 hover:bg-slate-800"
           }`}
@@ -962,6 +1104,7 @@ const handleIrACierre = async () => {
           type="button"
           onClick={mostrarFormularioDescuentoSenior}
           disabled={
+            guardandoPropina ||
             !formaPago ||
             descuentosSeniorAplicados[facturaParaCobrar.id] ||
             Number(facturaParaCobrar.valor_descuento ?? 0) > 0
@@ -1003,6 +1146,7 @@ const handleIrACierre = async () => {
               type="button"
               onClick={aplicarDescuentoSenior}
               disabled={
+                guardandoPropina ||
                 aplicandoDescuentoSenior ||
                 dniSenior.length !== 13 ||
                 descuentosSeniorAplicados[facturaParaCobrar.id] ||
@@ -1036,9 +1180,9 @@ const handleIrACierre = async () => {
 
         <button
           onClick={handleConfirmarPago}
-          disabled={procesando || !impresionConfirmada || !formaPago || !!errorPagoMixto}
+          disabled={procesando || !impresionConfirmada || !formaPago || !!errorPagoMixto || guardandoPropina || propinaPendiente}
           className={`w-full font-bold py-3 rounded-lg text-white ${
-            procesando || !impresionConfirmada || !formaPago || !!errorPagoMixto
+            procesando || !impresionConfirmada || !formaPago || !!errorPagoMixto || guardandoPropina || propinaPendiente
               ? 'bg-emerald-600/50 cursor-not-allowed'
               : 'bg-emerald-600 hover:bg-emerald-700'
           }`}
